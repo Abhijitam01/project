@@ -7,19 +7,18 @@
 //     return response.data.room.id;
 // }
 
-export default async function({
-    params
-}: {
-    params: {
+export default async function RoomPage(props: {
+    params: Promise<{
         slug: string
-    }
+    }>
 }) {
-    // const slug = (await params).slug;
+    const params = await props.params;
+    const { slug } = params;
     // const roomId = await getRoomId(slug);
     
     // return <ChatRoom id={roomId}></ChatRoom>
     return <div>
-
+        Room: {slug}
     </div>
 
 }
