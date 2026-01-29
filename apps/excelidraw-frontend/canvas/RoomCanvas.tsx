@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Canvas } from "./Canvas"
-import { Toolbar } from "@/components/Toolbar"
+import { Toolbar } from "@repo/ui/Toolbar"
 import { RoomResponse } from "@repo/common/types"
 
 export const RoomCanvas = ({roomId, room}: {roomId :string, room: RoomResponse}) => {

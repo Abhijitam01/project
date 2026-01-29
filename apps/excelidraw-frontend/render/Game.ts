@@ -1,5 +1,5 @@
 import { getRoom } from "@/actions/getRoom"
-import { Tool } from "@/canvas/Canvas";
+import { Tool } from "@repo/common";
 import { RoomResponse } from "@repo/common/types"
 type Shape = {
     type: "rect";

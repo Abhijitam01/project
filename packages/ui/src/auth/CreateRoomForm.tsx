@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { CreateRoomSchema } from "@repo/common/types";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "../card";
 import {
   Form,
   FormControl,
@@ -13,9 +13,9 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "@repo/ui/form";
-import { Input } from "@repo/ui/input";
-import { Button } from "@repo/ui/button";
+} from "../form";
+import { Input } from "../input";
+import { Button } from "../button";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";

@@ -1,8 +1,8 @@
 import { Circle, Eraser, HandIcon, Pencil, RectangleHorizontalIcon, Slash } from "lucide-react"
 import { ToolButton } from "./ToolButton"
-import { Tool } from "@/canvas/Canvas"
+import { Tool } from "@repo/common"
 import { ReactNode } from "react"
-import { Separator } from "@repo/ui/separator"
+import { Separator } from "./separator"
 
 interface ToolbarProps{
     activeTool : Tool

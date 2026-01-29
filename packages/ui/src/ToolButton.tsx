@@ -1,4 +1,4 @@
-import { Tool } from "@/canvas/Canvas"
+import { Tool } from "@repo/common"
 
 interface ToolProps{
     tool: string
