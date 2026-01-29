@@ -1,5 +1,11 @@
-import { AuthPage } from "@/components/AuthPage";
+import { RegisterForm } from "@/components/auth/Register-form"
 
-export default function Signup() {
-    return <AuthPage isSignin={false} />
+const page = () => {
+  return (  
+    <div className="w-full h-screen flex items-center justify-center">
+    <RegisterForm />
+    </div>
+  )
 }
+
+export default page
