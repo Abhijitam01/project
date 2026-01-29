@@ -1,6 +1,6 @@
-import { initDraw } from "@/draw";
+import { initDraw } from "@repo/common";
 import { useEffect, useRef, useState } from "react";
-import { Game } from "@/draw/Game";
+import { Game } from "@repo/common";
 import { MainSidebar } from "./MainSidebar";
 import { PropertiesSidebar } from "./PropertiesSidebar";
 

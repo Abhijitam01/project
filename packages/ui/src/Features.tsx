@@ -1,5 +1,5 @@
-import { Squares } from "@repo/ui/squares-background"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@repo/ui/card"
+import { Squares } from "./squares-background"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./card"
 import { PenTool, Share2, Users, Layers, Zap, Lock } from "lucide-react"
 
 const features = [

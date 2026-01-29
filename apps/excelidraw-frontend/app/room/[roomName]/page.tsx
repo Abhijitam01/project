@@ -1,6 +1,6 @@
 import { getRoom } from "@/actions/getRoom"
 import { RoomCanvas } from "@/canvas/RoomCanvas"
-import { Toolbar } from "@/components/Toolbar"
+import { Toolbar } from "@repo/ui/Toolbar"
 
 
 const page = async ({params}: {

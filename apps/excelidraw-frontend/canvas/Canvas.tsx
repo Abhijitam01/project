@@ -1,27 +1,17 @@
 "use client"
 
-import { Scale } from "@/components/Scale."
-import { Sidebar } from "@/components/Sidebar"
-import { Toolbar } from "@/components/Toolbar"
+import { Scale } from "@repo/ui/Scale"
+import { Sidebar } from "@repo/ui/Sidebar"
+import { Toolbar } from "@repo/ui/Toolbar"
 import { Game } from "@/render/Game"
 import { useEffect, useRef, useState } from "react"
-import { RoomResponse } from "@repo/common/types"
+import { RoomResponse, Tool, strokeFill, strokeWidth, bgFill } from "@repo/common"
 
 interface CanvasProps {
     roomId: string
     socket: WebSocket
     room: RoomResponse
 }
-
-export type Tool = "rect" | "ellipse" | "grab" | "line" | "pencil" | "erase"
-
-export type strokeWidth = 1 | 2 | 4
-
-export type strokeFill = "rgba(211, 211, 211)" | "rgba(242, 154, 158)" | "rgba(77, 161, 83)" | "rgba(98, 177, 247)" | "rgba(183, 98, 42)"
-
-export type bgFill = "rgba(0, 0, 0, 0)" | "rgba(89, 49, 49)" | "rgba(23, 61, 16)" | "rgba(30, 70, 101)" | "rgba(49, 37, 7)"
-
-
 
 export const Canvas = ({roomId, socket , room}: CanvasProps) => {
 

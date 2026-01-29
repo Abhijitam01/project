@@ -1,6 +1,6 @@
-import { bgFill, strokeFill, strokeWidth, Tool } from "@/canvas/Canvas";
+import { Tool, bgFill, strokeFill, strokeWidth } from "@repo/common";
 import React from "react";
-import { Separator } from "@repo/ui/separator";
+import { Separator } from "./separator";
 
 interface SidebarProps {
     activeTool: Tool;

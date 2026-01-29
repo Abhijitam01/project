@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "motion/react"
-import { Button } from "@repo/ui/button"
+import { Button } from "./button"
 import { ArrowRight, Sparkles } from "lucide-react"
 
 export const Hero = () => {

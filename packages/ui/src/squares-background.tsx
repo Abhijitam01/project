@@ -20,9 +20,9 @@ export function Squares({
   className,
 }: SquaresProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const requestRef = useRef<number>()
-  const numSquaresX = useRef<number>()
-  const numSquaresY = useRef<number>()
+  const requestRef = useRef<number | undefined>(undefined)
+  const numSquaresX = useRef<number | undefined>(undefined)
+  const numSquaresY = useRef<number | undefined>(undefined)
   const gridOffset = useRef({ x: 0, y: 0 })
   const [hoveredSquare, setHoveredSquare] = useState<{
     x: number

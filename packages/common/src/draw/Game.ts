@@ -1,37 +1,11 @@
-import { Tool } from "@/components/Canvas";
-import { getExistingShapes } from "./http";
 
-type Shape = {
-    type: "rect";
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-} | {
-    type: "circle";
-    centerX: number;
-    centerY: number;
-    radius: number;
-} | {
-    type: "pencil";
-    points: { x: number; y: number }[];
-} | {
-    type: "arrow";
-    x: number;
-    y: number;
-    endX: number;
-    endY: number;
-} | {
-    type: "text";
-    x: number;
-    y: number;
-    text: string;
-}
+import { Tool, CanvasShape } from "./types";
+import { getExistingCanvasShapes } from "./http";
 
 export class Game {
     private canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
-    private existingShapes: Shape[]
+    private existingCanvasShapes: CanvasShape[]
     private roomId: string;
     private clicked: boolean;
     private startX = 0;
@@ -44,7 +18,7 @@ export class Game {
     constructor(canvas: HTMLCanvasElement, roomId: string, socket: WebSocket) {
         this.canvas = canvas;
         this.ctx = canvas.getContext("2d")!;
-        this.existingShapes = [];
+        this.existingCanvasShapes = [];
         this.roomId = roomId;
         this.socket = socket;
         this.clicked = false;
@@ -64,7 +38,7 @@ export class Game {
     }
 
     async init() {
-        this.existingShapes = await getExistingShapes(this.roomId);
+        this.existingCanvasShapes = await getExistingCanvasShapes(this.roomId);
         this.clearCanvas();
     }
 
@@ -72,8 +46,8 @@ export class Game {
         this.socket.onmessage = (event) => {
             const message = JSON.parse(event.data);
             if (message.type == "chat") {
-                const parsedShape = JSON.parse(message.message)
-                this.existingShapes.push(parsedShape.shape)
+                const parsedCanvasShape = JSON.parse(message.message)
+                this.existingCanvasShapes.push(parsedCanvasShape.shape)
                 this.clearCanvas();
             }
         }
@@ -84,7 +58,7 @@ export class Game {
         this.ctx.fillStyle = "rgba(0, 0, 0)"
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-        this.existingShapes.forEach((shape) => {
+        this.existingCanvasShapes.forEach((shape) => {
             this.ctx.strokeStyle = "rgba(255, 255, 255)"
             this.ctx.lineWidth = 2;
             if (shape.type === "rect") {
@@ -151,7 +125,7 @@ export class Game {
         const width = e.clientX - this.startX;
         const height = e.clientY - this.startY;
         const selectedTool = this.selectedTool;
-        let shape: Shape | null = null;
+        let shape: CanvasShape | null = null;
         if (selectedTool === "rect") {
             shape = { type: "rect", x: this.startX, y: this.startY, height, width }
         } else if (selectedTool === "circle") {
@@ -169,7 +143,7 @@ export class Game {
             }
         }
         if (!shape) return;
-        this.existingShapes.push(shape);
+        this.existingCanvasShapes.push(shape);
         this.socket.send(JSON.stringify({
             type: "chat",
             message: JSON.stringify({ shape }),
