@@ -335,7 +335,9 @@ export class Game {
                     height,
                     this.strokeWidth,
                     this.strokeFill,
-                    this.bgFill
+                    this.bgFill,
+                    this.opacity,
+                    this.strokeStyle
                 )
             } else if(activeTool === "ellipse"){
                 const centerX = this.startX + width / 2;
@@ -349,15 +351,43 @@ export class Game {
                     radY,
                     this.strokeWidth,
                     this.strokeFill,    
-                    this.bgFill
+                    this.bgFill,
+                    this.opacity,
+                    this.strokeStyle
+                )
+            } else if(activeTool === "diamond"){
+                this.drawDiamond(
+                    this.startX,
+                    this.startY,
+                    width,
+                    height,
+                    this.strokeWidth,
+                    this.strokeFill,
+                    this.bgFill,
+                    this.opacity,
+                    this.strokeStyle
+                )
+            } else if(activeTool === "triangle"){
+                this.drawTriangle(
+                    this.startX,
+                    this.startY,
+                    width,
+                    height,
+                    this.strokeWidth,
+                    this.strokeFill,
+                    this.bgFill,
+                    this.opacity,
+                    this.strokeStyle
                 )
             } else if(activeTool === "line"){
-                this.drawLine(this.startX,this.startY,x,y,  this.strokeWidth, this.strokeFill)
+                this.drawLine(this.startX, this.startY, x, y, this.strokeWidth, this.strokeFill, this.opacity, this.strokeStyle)
+            } else if(activeTool === "arrow"){
+                this.drawArrow(this.startX, this.startY, x, y, this.strokeWidth, this.strokeFill, this.opacity, this.strokeStyle)
             } else if(activeTool === "pencil"){
                 const currentShape = this.existingShape[this.existingShape.length - 1]
                 if(currentShape?.type === "pencil" ){
                     currentShape.points.push({x , y})
-                    this.drawPencil(currentShape.points, this.strokeWidth, this.strokeFill)
+                    this.drawPencil(currentShape.points, this.strokeWidth, this.strokeFill, this.opacity, this.strokeStyle)
                 }
             } else if (activeTool === "erase"){
                 this.erase(x, y)
@@ -550,6 +580,122 @@ export class Game {
         this.ctx.setLineDash([]);
     }
 
+    drawArrow(fromX: number, fromY: number, toX: number, toY: number, strokeWidth: number, strokeFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid") {
+        const previousAlpha = this.ctx.globalAlpha;
+        this.ctx.globalAlpha = opacity;
+        this.applyStrokeStyle(strokeStyle);
+
+        // Draw the line
+        this.ctx.beginPath();
+        this.ctx.strokeStyle = strokeFill;
+        this.ctx.lineWidth = strokeWidth;
+        this.ctx.moveTo(fromX, fromY);
+        this.ctx.lineTo(toX, toY);
+        this.ctx.stroke();
+
+        // Draw arrowhead
+        const angle = Math.atan2(toY - fromY, toX - fromX);
+        const arrowLength = 15;
+        const arrowAngle = Math.PI / 6;
+
+        this.ctx.setLineDash([]); // Arrowhead is always solid
+        this.ctx.beginPath();
+        this.ctx.moveTo(toX, toY);
+        this.ctx.lineTo(
+            toX - arrowLength * Math.cos(angle - arrowAngle),
+            toY - arrowLength * Math.sin(angle - arrowAngle)
+        );
+        this.ctx.moveTo(toX, toY);
+        this.ctx.lineTo(
+            toX - arrowLength * Math.cos(angle + arrowAngle),
+            toY - arrowLength * Math.sin(angle + arrowAngle)
+        );
+        this.ctx.stroke();
+
+        this.ctx.globalAlpha = previousAlpha;
+        this.ctx.setLineDash([]);
+    }
+
+    drawDiamond(x: number, y: number, width: number, height: number, strokeWidth: number, strokeFill: string, bgFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid") {
+        const posX = width < 0 ? x + width : x;
+        const posY = height < 0 ? y + height : y;
+        const normalizedWidth = Math.abs(width);
+        const normalizedHeight = Math.abs(height);
+
+        strokeWidth = strokeWidth || 1;
+        strokeFill = strokeFill || "rgba(255, 255, 255)";
+        bgFill = bgFill || "rgba(18, 18, 18)";
+
+        const previousAlpha = this.ctx.globalAlpha;
+        this.ctx.globalAlpha = opacity;
+        this.applyStrokeStyle(strokeStyle);
+
+        // Diamond shape
+        const centerX = posX + normalizedWidth / 2;
+        const centerY = posY + normalizedHeight / 2;
+
+        this.ctx.beginPath();
+        this.ctx.moveTo(centerX, posY); // Top
+        this.ctx.lineTo(posX + normalizedWidth, centerY); // Right
+        this.ctx.lineTo(centerX, posY + normalizedHeight); // Bottom
+        this.ctx.lineTo(posX, centerY); // Left
+        this.ctx.closePath();
+
+        this.ctx.strokeStyle = strokeFill;
+        this.ctx.lineWidth = strokeWidth;
+        this.ctx.fillStyle = bgFill;
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        this.ctx.globalAlpha = previousAlpha;
+        this.ctx.setLineDash([]);
+    }
+
+    drawTriangle(x: number, y: number, width: number, height: number, strokeWidth: number, strokeFill: string, bgFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid") {
+        const posX = width < 0 ? x + width : x;
+        const posY = height < 0 ? y + height : y;
+        const normalizedWidth = Math.abs(width);
+        const normalizedHeight = Math.abs(height);
+
+        strokeWidth = strokeWidth || 1;
+        strokeFill = strokeFill || "rgba(255, 255, 255)";
+        bgFill = bgFill || "rgba(18, 18, 18)";
+
+        const previousAlpha = this.ctx.globalAlpha;
+        this.ctx.globalAlpha = opacity;
+        this.applyStrokeStyle(strokeStyle);
+
+        // Triangle shape
+        const centerX = posX + normalizedWidth / 2;
+
+        this.ctx.beginPath();
+        this.ctx.moveTo(centerX, posY); // Top center
+        this.ctx.lineTo(posX + normalizedWidth, posY + normalizedHeight); // Bottom right
+        this.ctx.lineTo(posX, posY + normalizedHeight); // Bottom left
+        this.ctx.closePath();
+
+        this.ctx.strokeStyle = strokeFill;
+        this.ctx.lineWidth = strokeWidth;
+        this.ctx.fillStyle = bgFill;
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        this.ctx.globalAlpha = previousAlpha;
+        this.ctx.setLineDash([]);
+    }
+
+    drawText(x: number, y: number, text: string, fontSize: number, strokeFill: string, opacity: number = 1) {
+        const previousAlpha = this.ctx.globalAlpha;
+        this.ctx.globalAlpha = opacity;
+
+        this.ctx.font = `${fontSize}px Inter, Arial, sans-serif`;
+        this.ctx.fillStyle = strokeFill;
+        this.ctx.textBaseline = "top";
+        this.ctx.fillText(text, x, y);
+
+        this.ctx.globalAlpha = previousAlpha;
+    }
+
     erase(x: number , y:number){
         const transformedPoint = this.transformPanScale(x, y);
 
@@ -623,6 +769,44 @@ export class Game {
                 toY: y,
                 strokeWidth: this.strokeWidth,
                 strokeFill: this.strokeFill,
+                opacity: this.opacity,
+                strokeStyle: this.strokeStyle,
+            }
+        } else if (this.activeTool === "arrow"){
+            shape = {
+                type: "arrow",
+                fromX: this.startX,
+                fromY: this.startY,
+                toX: x,
+                toY: y,
+                strokeWidth: this.strokeWidth,
+                strokeFill: this.strokeFill,
+                opacity: this.opacity,
+                strokeStyle: this.strokeStyle,
+            }
+        } else if (this.activeTool === "diamond"){
+            shape = {
+                type: "diamond",
+                x: this.startX,
+                y: this.startY,
+                width,
+                height,
+                strokeWidth: this.strokeWidth,
+                strokeFill: this.strokeFill,
+                bgFill: this.bgFill,
+                opacity: this.opacity,
+                strokeStyle: this.strokeStyle,
+            }
+        } else if (this.activeTool === "triangle"){
+            shape = {
+                type: "triangle",
+                x: this.startX,
+                y: this.startY,
+                width,
+                height,
+                strokeWidth: this.strokeWidth,
+                strokeFill: this.strokeFill,
+                bgFill: this.bgFill,
                 opacity: this.opacity,
                 strokeStyle: this.strokeStyle,
             }
