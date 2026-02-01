@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useUser } from "@/hooks/useUser"
-import { Button } from "@repo/ui/button"
+import { Button } from "@/components/ui/button"
 
 
 

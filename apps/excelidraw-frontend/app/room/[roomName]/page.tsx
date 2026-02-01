@@ -1,27 +1,21 @@
 import { getRoom } from "@/actions/getRoom"
 import { RoomCanvas } from "@/canvas/RoomCanvas"
-import { Toolbar } from "@repo/ui/Toolbar"
 
-
-const page = async ({params}: {
-    params : Promise<{
-        roomName :string
+interface PageProps {
+    params: Promise<{
+        roomName: string
     }>
-}) => {
+}
 
-    const roomName = (await params).roomName
-
+const page = async ({params}: PageProps) => {
+    const { roomName } = await params
     const room = await getRoom(roomName)
 
     if(!room){
-        return <p>The room Doesnt exist</p>
+        return <p>The room doesn&apos;t exist</p>
     }
 
-  return (
-
-        <RoomCanvas roomId={room.id} room={room} />
-
-  )
+    return <RoomCanvas roomId={room.id} room={room} />
 }
 
 export default page

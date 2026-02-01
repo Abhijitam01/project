@@ -16,6 +16,7 @@ export const useSocket = (roomId: string | null) => {
     const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL}?token=${token}`);
 
     ws.onopen = () => {
+      console.log("WebSocket connection opened");
       setSocket(ws);
       const data = JSON.stringify({
         type: "join_room",
@@ -25,7 +26,7 @@ export const useSocket = (roomId: string | null) => {
     };
 
     ws.onmessage = (event) => {
-      // Handle incoming WebSocket messages
+      console.log("WebSocket message received:", event.data);
     };
 
     ws.onerror = (error) => {
@@ -33,7 +34,7 @@ export const useSocket = (roomId: string | null) => {
     };
 
     ws.onclose = () => {
-      // WebSocket connection closed
+      console.log("WebSocket connection closed");
     };
 
     return () => {

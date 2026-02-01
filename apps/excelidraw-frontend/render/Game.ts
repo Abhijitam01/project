@@ -1,6 +1,8 @@
 import { getRoom } from "@/actions/getRoom"
-import { Tool } from "@repo/common";
-import { RoomResponse } from "@repo/common/types"
+import { Tool } from "@/canvas/Canvas";
+
+type StrokeStyle = "solid" | "dashed" | "dotted";
+
 type Shape = {
     type: "rect";
     x: number;
@@ -10,6 +12,8 @@ type Shape = {
     strokeWidth: number;
     strokeFill: string;
     bgFill: string;
+    opacity: number;
+    strokeStyle: StrokeStyle;
 } | {
     type: "ellipse";
     centerX: number,
@@ -19,6 +23,8 @@ type Shape = {
     strokeWidth: number;
     strokeFill: string; 
     bgFill: string;
+    opacity: number;
+    strokeStyle: StrokeStyle;
 } | {
     type: "line";
     fromX: number;
@@ -27,14 +33,55 @@ type Shape = {
     toY: number;
     strokeWidth: number;
     strokeFill: string; 
-
+    opacity: number;
+    strokeStyle: StrokeStyle;
+} | {
+    type: "arrow";
+    fromX: number;
+    fromY: number;
+    toX: number;
+    toY: number;
+    strokeWidth: number;
+    strokeFill: string; 
+    opacity: number;
+    strokeStyle: StrokeStyle;
+} | {
+    type: "diamond";
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    strokeWidth: number;
+    strokeFill: string;
+    bgFill: string;
+    opacity: number;
+    strokeStyle: StrokeStyle;
+} | {
+    type: "triangle";
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    strokeWidth: number;
+    strokeFill: string;
+    bgFill: string;
+    opacity: number;
+    strokeStyle: StrokeStyle;
 } | {
     type: "pencil"
     points : {x: number, y:number}[]
     strokeWidth: number;
     strokeFill: string; 
-
-
+    opacity: number;
+    strokeStyle: StrokeStyle;
+} | {
+    type: "text";
+    x: number;
+    y: number;
+    text: string;
+    fontSize: number;
+    strokeFill: string;
+    opacity: number;
 }
 
 export class Game {
@@ -45,7 +92,7 @@ export class Game {
     private socket: WebSocket
     private existingShape: Shape[]
     private clicked: boolean
-    private room: RoomResponse
+    private room: any
     private activeTool: Tool = "grab"
     private startX: number = 0
     private startY: number = 0
@@ -57,12 +104,21 @@ export class Game {
     private  strokeWidth: number = 1   
     private  strokeFill: string = "rgba(255, 255, 255)"
     private  bgFill: string = "rgba(18, 18, 18)"
+    private  opacity: number = 1
+    private  strokeStyle: StrokeStyle = "solid"
+    private  fontSize: number = 16
+    private  history: Shape[][] = []
+    private  historyStep: number = -1
+    private  selectedShapeIndex: number | null = null
+    private  isDragging: boolean = false
+    private  dragOffsetX: number = 0
+    private  dragOffsetY: number = 0
     
     constructor(
         canvas: HTMLCanvasElement , 
         roomId: string , 
         socket: WebSocket, 
-        room: RoomResponse,  
+        room: any,  
         onScaleChangeCallback: (scale: number) => void
 ){
         this.canvas = canvas
@@ -89,6 +145,7 @@ export class Game {
             const shapes = JSON.parse(shape.data)
             this.existingShape.push(shapes.shape)
         })
+        console.log(this.existingShape)
         this.clearCanvas()
     }
 
@@ -140,6 +197,48 @@ export class Game {
         this.clearCanvas()
     }
 
+    setOpacity(opacity: number){
+        this.opacity = opacity
+        this.clearCanvas()
+    }
+
+    setStrokeStyle(style: StrokeStyle){
+        this.strokeStyle = style
+        this.clearCanvas()
+    }
+
+    setFontSize(size: number){
+        this.fontSize = size
+    }
+
+    saveToHistory(){
+        this.historyStep++
+        this.history = this.history.slice(0, this.historyStep)
+        this.history.push([...this.existingShape])
+    }
+
+    undo(){
+        if(this.historyStep > 0){
+            this.historyStep--
+            const previousState = this.history[this.historyStep]
+            if(previousState){
+                this.existingShape = [...previousState]
+                this.clearCanvas()
+            }
+        }
+    }
+
+    redo(){
+        if(this.historyStep < this.history.length - 1){
+            this.historyStep++
+            const nextState = this.history[this.historyStep]
+            if(nextState){
+                this.existingShape = [...nextState]
+                this.clearCanvas()
+            }
+        }
+    }
+
     clearCanvas() {
         this.ctx.setTransform(this.scale, 0, 0, this.scale, this.panX, this.panY);
         this.ctx.clearRect(
@@ -160,16 +259,28 @@ export class Game {
 
         this.existingShape.map((shape: Shape)=>{
             if(shape.type == "rect"){
-                this.drawRect(shape.x, shape.y, shape.width, shape.height, shape.strokeWidth, shape.strokeFill, shape.bgFill);
+                this.drawRect(shape.x, shape.y, shape.width, shape.height, shape.strokeWidth, shape.strokeFill, shape.bgFill, shape.opacity, shape.strokeStyle);
             }
             else if (shape.type === "ellipse"){
-                this.drawEllipse(shape.centerX , shape.centerY, shape.radX, shape.radY, shape.strokeWidth, shape.strokeFill, shape.bgFill)
+                this.drawEllipse(shape.centerX , shape.centerY, shape.radX, shape.radY, shape.strokeWidth, shape.strokeFill, shape.bgFill, shape.opacity, shape.strokeStyle)
             }
             else if (shape.type === "line"){
-                this.drawLine(shape.fromX, shape.fromY, shape.toX, shape.toY, shape.strokeWidth, shape.strokeFill)
+                this.drawLine(shape.fromX, shape.fromY, shape.toX, shape.toY, shape.strokeWidth, shape.strokeFill, shape.opacity, shape.strokeStyle)
+            }
+            else if (shape.type === "arrow"){
+                this.drawArrow(shape.fromX, shape.fromY, shape.toX, shape.toY, shape.strokeWidth, shape.strokeFill, shape.opacity, shape.strokeStyle)
+            }
+            else if (shape.type === "diamond"){
+                this.drawDiamond(shape.x, shape.y, shape.width, shape.height, shape.strokeWidth, shape.strokeFill, shape.bgFill, shape.opacity, shape.strokeStyle)
+            }
+            else if (shape.type === "triangle"){
+                this.drawTriangle(shape.x, shape.y, shape.width, shape.height, shape.strokeWidth, shape.strokeFill, shape.bgFill, shape.opacity, shape.strokeStyle)
             }
             else if (shape.type === "pencil"){
-                this.drawPencil(shape.points, shape.strokeWidth, shape.strokeFill)
+                this.drawPencil(shape.points, shape.strokeWidth, shape.strokeFill, shape.opacity, shape.strokeStyle)
+            }
+            else if (shape.type === "text"){
+                this.drawText(shape.x, shape.y, shape.text, shape.fontSize, shape.strokeFill, shape.opacity)
             }
         })
 
@@ -191,7 +302,8 @@ export class Game {
                 points: [{x , y}],
                 strokeWidth: this.strokeWidth,
                 strokeFill: this.strokeFill,
-
+                opacity: this.opacity,
+                strokeStyle: this.strokeStyle,
             })
         }
         else if (this.activeTool === "erase") {
@@ -331,7 +443,17 @@ export class Game {
 
 
 
-    drawRect(x:number , y:number , width: number, height: number, strokeWidth: number, strokeFill: string, bgFill: string){
+    applyStrokeStyle(strokeStyle: StrokeStyle) {
+        if (strokeStyle === "dashed") {
+            this.ctx.setLineDash([10, 5]);
+        } else if (strokeStyle === "dotted") {
+            this.ctx.setLineDash([2, 3]);
+        } else {
+            this.ctx.setLineDash([]);
+        }
+    }
+
+    drawRect(x:number , y:number , width: number, height: number, strokeWidth: number, strokeFill: string, bgFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid"){
         // If we draw right to left, width is -ve and so postion of mouse + (-ve width) gives top left corner
         const posX = width < 0 ? x + width : x;
         const posY = height < 0 ? y + height : y;
@@ -344,7 +466,9 @@ export class Game {
     
         const radius = Math.min(Math.abs(Math.max(normalizedWidth, normalizedHeight) / 20), normalizedWidth / 2, normalizedHeight / 2);
     
-        
+        const previousAlpha = this.ctx.globalAlpha;
+        this.ctx.globalAlpha = opacity;
+        this.applyStrokeStyle(strokeStyle);
 
         // RoundRect : https://stackoverflow.com/a/3368118
         this.ctx.beginPath();
@@ -363,13 +487,19 @@ export class Game {
         this.ctx.closePath();
         this.ctx.fill();
         this.ctx.stroke();
-        // this.ctx.strokeRect(x , y, width, height)
+        
+        this.ctx.globalAlpha = previousAlpha;
+        this.ctx.setLineDash([]);
     }
 
-    drawEllipse(x: number, y:number, width: number , height: number, strokeWidth: number, strokeFill: string, bgFill: string){
+    drawEllipse(x: number, y:number, width: number , height: number, strokeWidth: number, strokeFill: string, bgFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid"){
         strokeWidth = strokeWidth || 1;
         strokeFill = strokeFill || "rgba(255, 255, 255)";    
         bgFill = bgFill || "rgba(18, 18, 18)";
+
+        const previousAlpha = this.ctx.globalAlpha;
+        this.ctx.globalAlpha = opacity;
+        this.applyStrokeStyle(strokeStyle);
 
         this.ctx.beginPath()
         this.ctx.strokeStyle = strokeFill;
@@ -379,11 +509,17 @@ export class Game {
         this.ctx.fill();
         this.ctx.stroke();
 
+        this.ctx.globalAlpha = previousAlpha;
+        this.ctx.setLineDash([]);
     }
 
-    drawLine(fromX:number, fromY:number , toX:number, toY:number ,  strokeWidth: number, strokeFill: string){
+    drawLine(fromX:number, fromY:number , toX:number, toY:number ,  strokeWidth: number, strokeFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid"){
         strokeWidth = strokeWidth || 1;
         strokeFill = strokeFill || "rgba(255, 255, 255)";
+
+        const previousAlpha = this.ctx.globalAlpha;
+        this.ctx.globalAlpha = opacity;
+        this.applyStrokeStyle(strokeStyle);
 
         this.ctx.beginPath()
         this.ctx.strokeStyle = strokeFill;
@@ -392,9 +528,16 @@ export class Game {
         this.ctx.moveTo(fromX, fromY)
         this.ctx.lineTo(toX, toY)
         this.ctx.stroke()
+
+        this.ctx.globalAlpha = previousAlpha;
+        this.ctx.setLineDash([]);
     }
 
-    drawPencil(points: {x:number, y:number}[], strokeWidth: number, strokeFill: string){
+    drawPencil(points: {x:number, y:number}[], strokeWidth: number, strokeFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid"){
+        const previousAlpha = this.ctx.globalAlpha;
+        this.ctx.globalAlpha = opacity;
+        this.applyStrokeStyle(strokeStyle);
+
         this.ctx.beginPath()
         this.ctx.strokeStyle = strokeFill;
         this.ctx.lineWidth = strokeWidth;
@@ -402,6 +545,9 @@ export class Game {
         this.ctx.moveTo(points[0].x , points[0].y)
         points.forEach(point => this.ctx.lineTo(point.x, point.y))
         this.ctx.stroke()
+
+        this.ctx.globalAlpha = previousAlpha;
+        this.ctx.setLineDash([]);
     }
 
     erase(x: number , y:number){
@@ -445,7 +591,9 @@ export class Game {
                 height,
                 strokeWidth: this.strokeWidth,
                 strokeFill: this.strokeFill,
-                bgFill: this.bgFill
+                bgFill: this.bgFill,
+                opacity: this.opacity,
+                strokeStyle: this.strokeStyle,
             } 
         } else if(this.activeTool === "ellipse"){
 
@@ -462,7 +610,9 @@ export class Game {
                 radY,
                 strokeWidth: this.strokeWidth,
                 strokeFill: this.strokeFill,
-                bgFill: this.bgFill
+                bgFill: this.bgFill,
+                opacity: this.opacity,
+                strokeStyle: this.strokeStyle,
             }
         } else if (this.activeTool === "line"){
             shape = {
@@ -473,7 +623,8 @@ export class Game {
                 toY: y,
                 strokeWidth: this.strokeWidth,
                 strokeFill: this.strokeFill,
-
+                opacity: this.opacity,
+                strokeStyle: this.strokeStyle,
             }
         } else if (this.activeTool === "pencil"){
             const currentShape = this.existingShape[this.existingShape.length - 1]
@@ -483,7 +634,8 @@ export class Game {
                     points: currentShape.points,
                     strokeWidth: this.strokeWidth,
                     strokeFill: this.strokeFill,
-
+                    opacity: this.opacity,
+                    strokeStyle: this.strokeStyle,
                 }
             }
             

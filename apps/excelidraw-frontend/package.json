@@ -1,5 +1,5 @@
 {
-  "name": "excelidraw-frontend",
+  "name": "web",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -16,9 +16,7 @@
     "@radix-ui/react-label": "^2.1.1",
     "@radix-ui/react-separator": "^1.1.1",
     "@radix-ui/react-slot": "^1.1.1",
-    "@repo/common": "workspace:*",
     "@repo/ui": "workspace:*",
-    "axios": "^1.7.9",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.473.0",
@@ -33,11 +31,12 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@repo/common": "workspace:*",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@types/node": "^20",
-    "@types/react": "19.2.10",
-    "@types/react-dom": "19.2.3",
+    "@types/react": "18.3.1",
+    "@types/react-dom": "18.3.0",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",

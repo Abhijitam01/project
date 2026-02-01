@@ -1,6 +1,6 @@
 "use client"
 
-import { CreateRoomForm } from "@repo/ui/auth/CreateRoomForm"
+import { CreateRoomForm } from "@/components/auth/CreateRoomForm"
 
 
 const page = () => {

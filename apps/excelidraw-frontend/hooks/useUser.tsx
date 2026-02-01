@@ -43,7 +43,7 @@ export const useUser = () : UseUserResponse => {
             setUser(data)
             
            }
-           catch(err : unknown){
+           catch(err : any){
            }
            finally{
             setIsLoading(false)

@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from "react"
 import { Canvas } from "./Canvas"
-import { Toolbar } from "@repo/ui/Toolbar"
-import { RoomResponse } from "@repo/common/types"
+import { Toolbar } from "@/components/Toolbar"
 
-export const RoomCanvas = ({roomId, room}: {roomId :string, room: RoomResponse}) => {
+export const RoomCanvas = ({roomId, room}: {roomId :string, room: any}) => {
     const [socket,  setSocket] = useState<WebSocket | null>(null)
 
     useEffect(()=>{

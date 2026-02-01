@@ -29,11 +29,12 @@ export const useRoomByName = (roomName: string) => {
                 }
 
                 const data : Room = await response.json()
+                console.log(data)
                 setRoom(data)
 
             }
-            catch(err : unknown){
-                // Error handling - could add proper error state here
+            catch(err : any){
+                console.log(err.message) 
             }
         }
 
