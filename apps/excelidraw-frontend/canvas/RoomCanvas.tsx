@@ -24,13 +24,12 @@ export const RoomCanvas = ({roomId, room}: {roomId :string, room: any}) => {
         }
 
         return () => {
-
-            const leaveData = JSON.stringify({
-                type: "leave_room"
-            })
-
-            ws.send(leaveData)
-
+            if (ws.readyState === WebSocket.OPEN) {
+                const leaveData = JSON.stringify({
+                    type: "leave_room"
+                })
+                ws.send(leaveData)
+            }
             ws.close()
         }
     }, [])
