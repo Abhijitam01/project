@@ -9,26 +9,46 @@ export const RoomCanvas = ({roomId, room}: {roomId :string, room: any}) => {
 
     useEffect(()=>{
         const token = localStorage.getItem("token")
+        
+        // Defensive check for token or WS_URL
+        if (!process.env.NEXT_PUBLIC_WS_URL || !token) {
+            console.error("Missing WS_URL or token");
+            return;
+        }
 
         const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL}/?token=${token}`)
 
-        ws.onopen = () => {
+        const handleOpen = () => {
             setSocket(ws)
-
+            
             const data = JSON.stringify({
                 type: "join_room",
                 roomId
             })
 
-            ws.send(data)
+            // Ensure connection is open before sending
+            if (ws.readyState === WebSocket.OPEN) {
+                try {
+                    ws.send(data)
+                } catch (e) {
+                    console.error("Error sending join_room:", e)
+                }
+            }
         }
+        
+        ws.addEventListener('open', handleOpen)
 
         return () => {
+            ws.removeEventListener('open', handleOpen)
             if (ws.readyState === WebSocket.OPEN) {
                 const leaveData = JSON.stringify({
                     type: "leave_room"
                 })
-                ws.send(leaveData)
+                try {
+                    ws.send(leaveData)
+                } catch (e) {
+                     console.error("Error sending leave_room:", e)
+                }
             }
             ws.close()
         }
