@@ -1,5 +1,6 @@
 import { getRoom } from "@/actions/getRoom"
 import { Tool } from "@/canvas/Canvas";
+import rough from 'roughjs';
 
 type StrokeStyle = "solid" | "dashed" | "dotted";
 
@@ -88,6 +89,7 @@ export class Game {
 
     private canvas: HTMLCanvasElement
     private ctx: CanvasRenderingContext2D
+    private rc: any // RoughCanvas instance
     private roomId: string
     private socket: WebSocket
     private existingShape: Shape[]
@@ -123,6 +125,7 @@ export class Game {
 ){
         this.canvas = canvas
         this.ctx = canvas.getContext("2d")!
+        this.rc = rough.canvas(canvas)
         this.roomId = roomId
         this.socket = socket
         this.clicked = false
@@ -296,7 +299,47 @@ export class Game {
         this.startX = x
         this.startY = y
 
-        if(this.activeTool === "pencil"){
+        // Handle selection and dragging with select tool
+        if (this.activeTool === "select") {
+            // Find shape under cursor (search from top to bottom)
+            for (let i = this.existingShape.length - 1; i >= 0; i--) {
+                const shape = this.existingShape[i]
+                if (shape && this.isPointInShape(x, y, shape)) {
+                    this.selectedShapeIndex = i
+                    this.isDragging = true
+                    
+                    // Calculate offset for smooth dragging with type guards
+                    if (shape.type === "rect" && 'x' in shape && 'y' in shape) {
+                        this.dragOffsetX = x - shape.x
+                        this.dragOffsetY = y - shape.y
+                    } else if (shape.type === "diamond" && 'x' in shape && 'y' in shape) {
+                        this.dragOffsetX = x - shape.x
+                        this.dragOffsetY = y - shape.y
+                    } else if (shape.type === "triangle" && 'x' in shape && 'y' in shape) {
+                        this.dragOffsetX = x - shape.x
+                        this.dragOffsetY = y - shape.y
+                    } else if (shape.type === "ellipse" && 'centerX' in shape && 'centerY' in shape) {
+                        this.dragOffsetX = x - shape.centerX
+                        this.dragOffsetY = y - shape.centerY
+                    } else if (shape.type === "line" && 'fromX' in shape && 'fromY' in shape) {
+                        this.dragOffsetX = x - shape.fromX
+                        this.dragOffsetY = y - shape.fromY
+                    } else if (shape.type === "arrow" && 'fromX' in shape && 'fromY' in shape) {
+                        this.dragOffsetX = x - shape.fromX
+                        this.dragOffsetY = y - shape.fromY
+                    } else if (shape.type === "text" && 'x' in shape && 'y' in shape) {
+                        this.dragOffsetX = x - shape.x
+                        this.dragOffsetY = y - shape.y
+                    }
+                    this.clearCanvas()
+                    return
+                }
+            }
+            // Clicked on empty space - deselect
+            this.selectedShapeIndex = null
+            this.clearCanvas()
+        }
+        else if(this.activeTool === "pencil"){
             this.existingShape.push({
                 type: "pencil",
                 points: [{x , y}],
@@ -319,6 +362,43 @@ export class Game {
 
             const {x ,y} = this.transformPanScale(e.clientX , e.clientY)
 
+            // Handle dragging selected shape
+            if (this.isDragging && this.selectedShapeIndex !== null) {
+                const shape = this.existingShape[this.selectedShapeIndex]
+                if (!shape) return
+
+                const newX = x - this.dragOffsetX
+                const newY = y - this.dragOffsetY
+
+                // Update shape position based on type
+                if (shape.type === "rect" || shape.type === "diamond" || shape.type === "triangle") {
+                    shape.x = newX
+                    shape.y = newY
+                } else if (shape.type === "ellipse") {
+                    shape.centerX = newX
+                    shape.centerY = newY
+                } else if (shape.type === "line" || shape.type === "arrow") {
+                    const deltaX = newX - shape.fromX
+                    const deltaY = newY - shape.fromY
+                    shape.fromX = newX
+                    shape.fromY = newY
+                    shape.toX += deltaX
+                    shape.toY += deltaY
+                } else if (shape.type === "text") {
+                    shape.x = newX
+                    shape.y = newY
+                } else if (shape.type === "pencil") {
+                    const deltaX = newX - (shape.points[0]?.x || 0)
+                    const deltaY = newY - (shape.points[0]?.y || 0)
+                    shape.points = shape.points.map(p => ({
+                        x: p.x + deltaX,
+                        y: p.y + deltaY
+                    }))
+                }
+
+                this.clearCanvas()
+                return
+            }
 
             const width = x - this.startX
             const height = y - this.startY
@@ -723,6 +803,22 @@ export class Game {
     mouseUpHandler = (e: MouseEvent) => {
         this.clicked= false
 
+        // Handle drag completion
+        if (this.isDragging && this.selectedShapeIndex !== null) {
+            this.isDragging = false
+            this.saveToHistory()
+            // Sync dragged shape position with server
+            const shape = this.existingShape[this.selectedShapeIndex]
+            if (shape) {
+                this.socket.send(JSON.stringify({
+                    type: "update",
+                    data: JSON.stringify({ shape, index: this.selectedShapeIndex }),
+                    roomId: this.roomId
+                }))
+            }
+            return
+        }
+
         const { x, y } = this.transformPanScale(e.clientX, e.clientY);
         const width = x - this.startX;
         const height = y - this.startY;
@@ -826,6 +922,20 @@ export class Game {
         } else if (this.activeTool === "grab"){
             this.startX = e.clientX 
             this.startY = e.clientY 
+        } else if (this.activeTool === "text") {
+            // Prompt for text input
+            const text = prompt("Enter text:")
+            if (text && text.trim()) {
+                shape = {
+                    type: "text",
+                    x: this.startX,
+                    y: this.startY,
+                    text: text.trim(),
+                    fontSize: this.fontSize,
+                    strokeFill: this.strokeFill,
+                    opacity: this.opacity,
+                }
+            }
         }
          
 
@@ -834,6 +944,7 @@ export class Game {
         }
 
         this.existingShape.push(shape)
+        this.saveToHistory()
 
         this.socket.send(JSON.stringify({
             type: "draw",

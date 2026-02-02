@@ -30,7 +30,7 @@ export const useUser = () : UseUserResponse => {
             const res = await fetch(`${process.env.NEXT_PUBLIC_HTTP_URL}/user`, {
                 method: "GET",
                 headers: {
-                    "authorization": `${localStorage.getItem("token")}`
+                    "authorization": localStorage.getItem("token") || ""
                 }
             })
 
