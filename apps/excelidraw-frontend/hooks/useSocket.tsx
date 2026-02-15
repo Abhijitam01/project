@@ -21,7 +21,6 @@ export const useSocket = (roomId: string | null, inviteCode?: string | null) => 
     const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL}/?token=${token}`);
 
     ws.onopen = () => {
-      console.log("WebSocket connection opened");
       setSocket(ws);
       const storedInvite = inviteCode ?? localStorage.getItem(`drawr:invite:${roomId}`) ?? "";
       const data = JSON.stringify({
@@ -32,16 +31,8 @@ export const useSocket = (roomId: string | null, inviteCode?: string | null) => 
       ws.send(data);
     };
 
-    ws.onmessage = (event) => {
-      console.log("WebSocket message received:", event.data);
-    };
-
     ws.onerror = (error) => {
       console.error("WebSocket error:", error);
-    };
-
-    ws.onclose = () => {
-      console.log("WebSocket connection closed");
     };
 
     return () => {

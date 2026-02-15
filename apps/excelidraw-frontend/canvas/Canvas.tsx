@@ -6,12 +6,13 @@ import { Toolbar } from "@/components/Toolbar"
 import { PresenceBar } from "@/components/PresenceBar"
 import { ShareButton } from "@/components/ShareButton"
 import { Game, PresenceUser } from "@/render/Game"
+import type { RoomData } from "@/types/room"
 import { useEffect, useRef, useState, ChangeEvent } from "react"
 
 interface CanvasProps {
   roomId: string
   socket: WebSocket
-  room: any
+  room: RoomData
   inviteCode: string | null
 }
 

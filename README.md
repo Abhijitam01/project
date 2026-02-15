@@ -1,108 +1,145 @@
-# Draw-App Monorepo
+# Sketchy
 
-This project is a real-time multiuser drawing application built with Next.js, Express, and WebSockets.
+Realtime multiplayer whiteboard built with Next.js, Express, WebSockets, and Prisma in a Turborepo monorepo.
 
-## Prerequisites
+## Live Links
+- Product: `https://your-domain.com`
+- Frontend: `https://app.your-domain.com`
+- HTTP API: `https://api.your-domain.com`
+- WebSocket: `wss://ws.your-domain.com`
 
-1. **Node.js**: Version 18 or higher.
-2. **Docker**: For running the database (PostgreSQL).
-3. **Package Manager**: `pnpm` is recommended.
+## Product Preview
+### Screenshot
+<!-- Replace this path with your final screenshot file -->
+![Sketchy Screenshot](./docs/assets/screenshot-main.png)
 
-## Getting Started
+### Demo Video
+<!-- Option 1: YouTube/Vimeo link -->
+- Demo: `https://www.youtube.com/watch?v=YOUR_VIDEO_ID`
 
-To run the entire application (frontend and both backends) simultaneously, follow these steps:
+<!-- Option 2: Local/public video file -->
+- MP4: `./docs/assets/demo.mp4`
 
-### 1. Start the Database
+## Features
+- Realtime collaborative drawing rooms
+- Shape tools, text, freehand pencil, erase
+- Selection, drag, resize handles, corner resize
+- Zoom/pan, keyboard shortcuts, undo/redo
+- Export: PNG, SVG, JSON
+- Import: JSON
+- Private rooms with invite code flow
 
-The project includes a `docker-compose.yml` to quickly start a PostgreSQL database.
+## Tech Stack
+- Frontend: Next.js (App Router), React, Tailwind CSS
+- UI Package: shared `@repo/ui`
+- HTTP Backend: Express + JWT auth
+- Realtime Backend: `ws` WebSocket server
+- Database: PostgreSQL + Prisma
+- Monorepo: Turborepo + pnpm workspaces
+- Validation: Zod
+- Testing: Vitest (schema and auth coverage baseline)
 
-From the root directory:
-
-```bash
-docker-compose up -d
+## Monorepo Structure
+```text
+apps/
+  excelidraw-frontend/    # Next.js app
+  http-backend/           # REST API server
+  ws-backend/             # WebSocket realtime server
+packages/
+  common/                 # Shared zod schemas + common utilities
+  db/                     # Prisma schema/client
+  ui/                     # Shared UI components
 ```
 
-**If you get a `KeyError: 'ContainerConfig'` or other errors**, use this fallback command to start the database manually:
+## Environment Variables
+### Root (`.env`)
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `NODE_ENV`
 
-```bash
-docker run -d --name drawr-db -p 5432:5432 -e POSTGRES_PASSWORD=mysecretpassword -e POSTGRES_USER=postgres -e POSTGRES_DB=drawr postgres:15-alpine
-```
+### Frontend (`apps/excelidraw-frontend`)
+- `NEXT_PUBLIC_HTTP_URL`
+- `NEXT_PUBLIC_WS_URL`
+- `NEXT_PUBLIC_ENABLE_LIVE_DEMO` (`false` to hide demo CTA)
 
-### Stopping/Canceling Containers
+### Backends
+- `JWT_SECRET` (same value in HTTP and WS services)
 
-To stop the database and other running containers:
-
-- **Using Compose**: `docker-compose down`
-- **Force Stop All Containers**: `docker stop $(docker ps -aq)`
-- **Remove All Containers**: `docker rm $(docker ps -aq)`
-- **Stop specifically the DB**: `docker stop drawr-db`
-
-### 2. Install Dependencies
-
-From the root directory:
-
+## Local Development
+### 1. Install
 ```bash
 pnpm install
 ```
 
-### 2. Configure Environment Variables
-
-Ensure you have a `.env` file in the root with the following:
-
-- `DATABASE_URL`: Your PostgreSQL connection string.
-- `JWT_SECRET`: A secret string for authentication.
-
-### 3. Database Setup
-
-Ensure the database schema is up to date:
-
+### 2. Start database
 ```bash
-cd packages/db
-pnpm prisma migrate dev
+docker compose up -d
 ```
 
-### 4. Run Everything
+### 3. Run migrations
+```bash
+pnpm --dir packages/db prisma migrate dev
+pnpm --dir packages/db prisma generate
+```
 
-From the root directory, run the development server:
-
+### 4. Run all apps
 ```bash
 pnpm dev
 ```
 
-This will concurrently start:
+Default local endpoints:
+- Frontend: `http://localhost:3000`
+- HTTP API: `http://localhost:3001`
+- WS: `ws://localhost:8080`
 
-- **Frontend**: http://localhost:3000 (Next.js)
-- **HTTP Backend**: http://localhost:3001 (Express)
-- **WS Backend**: WebSocket server for real-time collaboration on port 8080.
+## Scripts
+From repo root:
+- `pnpm dev` - run all services in dev
+- `pnpm build` - build all workspaces
+- `pnpm lint` - lint all workspaces
+- `pnpm test` - run baseline tests (`packages/common`, `apps/ws-backend`)
 
-## Database Management
+Package-level examples:
+- `pnpm --dir apps/excelidraw-frontend run check-types`
+- `pnpm --dir apps/excelidraw-frontend run lint`
+- `pnpm --dir apps/http-backend run build`
+- `pnpm --dir apps/ws-backend run build`
 
-### Subsequent Migrations
+## Production Release
+Use `RELEASE_CHECKLIST.md` as the source of truth before go-live.
 
-Whenever you update the `packages/db/prisma/schema.prisma` file, you need to apply the changes:
-
-1. **Apply Changes**:
-   ```bash
-   cd packages/db
-   pnpm prisma migrate dev
-   ```
-   This will create a new migration file and update your database schema.
-
-### Viewing the Database
-
-You can use **Prisma Studio** to view and edit your data in a web interface:
-
+Quick commands:
 ```bash
-cd packages/db
-pnpm prisma studio
+pnpm install
+pnpm build
+pnpm lint
+pnpm test
+pnpm --dir packages/db prisma migrate deploy
 ```
 
-This will open a dashboard at http://localhost:5555 where you can explore your tables and records.
+## API Snapshot
+### HTTP
+- `POST /signup`
+- `POST /signin`
+- `POST /room` (auth required)
+- `GET /room/:roomName`
+- `GET /user` (auth required)
 
-## Individual Services
+### WebSocket Message Types
+- `join_room`
+- `leave_room`
+- `draw`
+- `erase`
+- `cursor`
+- `reset`
+- `bulk_draw`
+- `presence`
 
-If you need to run services individually:
+## Roadmap
+- Backend integration tests for room and auth endpoints
+- End-to-end collaborative room tests
+- Better observability (error tracking + metrics + alerts)
+- Deployment templates for Docker/K8s
 
-- **Frontend**: `cd apps/excelidraw-frontend && pnpm dev`
-- **HTTP Backend**: `cd apps/http-backend && pnpm dev`
-- **WS Backend**: `cd apps/ws-backend && pnpm dev`
+## License
+Set your license here.

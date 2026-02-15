@@ -1,4 +1,11 @@
-export const getRoom = async (roomName : string, invite?: string) => {
+import type { RoomData } from "@/types/room"
+
+type GetRoomResponse = {
+  room?: RoomData
+  error?: string
+}
+
+export const getRoom = async (roomName: string, invite?: string): Promise<RoomData> => {
     const params = new URLSearchParams()
     if (invite) {
         params.set("invite", invite)
@@ -10,11 +17,11 @@ export const getRoom = async (roomName : string, invite?: string) => {
         method: "GET"
     })
 
-    if (res.status === 200) {
-        const data = await res.json()
+    const data = (await res.json().catch(() => null)) as GetRoomResponse | null
+
+    if (res.status === 200 && data?.room) {
         return data.room
     }
 
-    const data = await res.json().catch(() => null)
     throw new Error(data?.error || "Something went wrong")
 }

@@ -31,8 +31,8 @@ export function LoginForm() {
           localStorage.setItem("token", res.token)
           router.push("/dashboard")
         })
-        .catch((err) => {
-          console.log(err)
+        .catch((err: unknown) => {
+          console.error("Login failed", err)
         })
     )
   }

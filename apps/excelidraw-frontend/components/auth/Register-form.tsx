@@ -31,8 +31,8 @@ export function RegisterForm() {
         .then(() => {
           router.push("/signin")
         })
-        .catch((err) => {
-          console.log(err)
+        .catch((err: unknown) => {
+          console.error("Registration failed", err)
         })
     )
   }

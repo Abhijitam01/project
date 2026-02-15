@@ -32,8 +32,8 @@ export const useRoomByName = (roomName: string) => {
                 setRoom(data.room)
 
             }
-            catch(err : any){
-                console.log(err.message) 
+            catch(err : unknown){
+                console.error(err instanceof Error ? err.message : "Failed to load room")
             }
         }
 

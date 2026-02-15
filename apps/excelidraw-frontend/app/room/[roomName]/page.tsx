@@ -20,7 +20,7 @@ const page = async ({params, searchParams}: PageProps) => {
         }
 
         const inviteToken = searchParams?.invite || room.inviteCode || null
-        return <RoomCanvas roomId={room.id} room={room} inviteCode={inviteToken} />
+        return <RoomCanvas roomId={String(room.id)} room={room} inviteCode={inviteToken} />
     } catch (error) {
         return <p>Error loading room: {(error as Error).message}</p>
     }

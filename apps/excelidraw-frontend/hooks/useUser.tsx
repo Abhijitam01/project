@@ -21,7 +21,7 @@ interface User {
 export const useUser = () : UseUserResponse => {
     const [user, setUser] = useState<User | undefined>(undefined)
     const [isLoading , setIsLoading] = useState(false)
-    const [error, setError] = useState(null)
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(()=>{
         const fetchUser = async () =>{
@@ -43,9 +43,9 @@ export const useUser = () : UseUserResponse => {
             setUser(data)
             
            }
-           catch(err : any){
+           catch(err : unknown){
             setUser(undefined)
-            setError(err?.message || "Something went wrong")
+            setError(err instanceof Error ? err.message : "Something went wrong")
            }
            finally{
             setIsLoading(false)

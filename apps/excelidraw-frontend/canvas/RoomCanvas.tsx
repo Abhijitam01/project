@@ -3,14 +3,15 @@
 import { useEffect } from "react"
 import { Canvas } from "./Canvas"
 import { useSocket } from "@/hooks/useSocket"
+import type { RoomData } from "@/types/room"
 
 export const RoomCanvas = ({
     roomId,
     room,
     inviteCode,
 }: {
-    roomId :string,
-    room: any,
+    roomId: string,
+    room: RoomData,
     inviteCode: string | null
 }) => {
     useEffect(()=>{

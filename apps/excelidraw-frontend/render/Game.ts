@@ -1,6 +1,6 @@
 import { getRoom } from "@/actions/getRoom"
 import { Tool } from "@/canvas/Canvas";
-import rough from 'roughjs';
+import type { RoomData, RoomShapeRecord } from "@/types/room"
 
 type StrokeStyle = "solid" | "dashed" | "dotted";
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
@@ -96,12 +96,11 @@ export class Game {
 
     private canvas: HTMLCanvasElement
     private ctx: CanvasRenderingContext2D
-    private rc: any // RoughCanvas instance
     private roomId: string
     private socket: WebSocket
     private existingShape: Shape[]
     private clicked: boolean
-    private room: any
+    private room: RoomData
     private activeTool: Tool = "grab"
     private startX: number = 0
     private startY: number = 0
@@ -145,13 +144,12 @@ export class Game {
         canvas: HTMLCanvasElement , 
         roomId: string , 
         socket: WebSocket, 
-        room: any,  
+        room: RoomData,  
         onScaleChangeCallback: (scale: number) => void,
         onPresenceUpdateCallback?: (users: PresenceUser[]) => void
 ){
         this.canvas = canvas
         this.ctx = canvas.getContext("2d")!
-        this.rc = rough.canvas(canvas)
         this.roomId = roomId
         this.socket = socket
         this.clicked = false
@@ -173,10 +171,10 @@ export class Game {
        async init()  {
         try {
             const room = await getRoom(this.room.roomName)
-            const shapes = Array.isArray(room?.shape) ? room.shape : []
-            shapes.forEach((shape: any)=>{
+            const shapes: RoomShapeRecord[] = Array.isArray(room?.shape) ? room.shape : []
+            shapes.forEach((shape)=>{
                 try {
-                    const parsed = JSON.parse(shape.data)
+                    const parsed = JSON.parse(shape.data) as { shape?: Shape }
                     if (parsed?.shape) {
                         this.existingShape.push(parsed.shape)
                     }
@@ -1708,13 +1706,13 @@ export class Game {
 
     async importJSON(file: File) {
         const text = await file.text()
-        let parsed: any
+        let parsed: unknown
         try {
             parsed = JSON.parse(text)
         } catch (error) {
             throw new Error("Invalid JSON")
         }
-        if (!Array.isArray(parsed?.shapes)) {
+        if (!this.isImportPayload(parsed)) {
             throw new Error("JSON must include a shapes array")
         }
 
@@ -1732,6 +1730,14 @@ export class Game {
             roomId: this.roomId,
             shapes: parsed.shapes
         }))
+    }
+
+    private isImportPayload(value: unknown): value is { shapes: Shape[] } {
+        if (!value || typeof value !== "object") {
+            return false
+        }
+        const payload = value as { shapes?: unknown }
+        return Array.isArray(payload.shapes)
     }
 
     private buildSVG() {
