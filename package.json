@@ -5,6 +5,7 @@
     "build": "turbo build",
     "dev": "turbo dev",
     "lint": "turbo lint",
+    "test": "pnpm --dir packages/common run test && pnpm --dir apps/ws-backend run test",
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
