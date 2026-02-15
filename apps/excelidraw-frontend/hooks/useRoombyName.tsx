@@ -28,9 +28,8 @@ export const useRoomByName = (roomName: string) => {
                     throw new Error("Something went wrong")
                 }
 
-                const data : Room = await response.json()
-                console.log(data)
-                setRoom(data)
+                const data : { room: Room } = await response.json()
+                setRoom(data.room)
 
             }
             catch(err : any){

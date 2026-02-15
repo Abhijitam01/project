@@ -23,6 +23,8 @@ model Room {
   userId   String
   user     User   @relation(fields: [userId], references: [id])
   shape    Shape[]
+  isPrivate Boolean @default(false)
+  inviteCode String? @unique
 }
 
 model Shape {

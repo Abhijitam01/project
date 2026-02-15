@@ -4,7 +4,7 @@ import { DashboardSidebar } from "./DashboardSidebar";
 import { useUser } from "@/hooks/useUser";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import { Button } from "./ui/button";
+import { Button } from "@repo/ui/button";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, error } = useUser();

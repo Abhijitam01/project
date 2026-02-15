@@ -1,230 +1,209 @@
-import { bgFill, strokeFill, strokeWidth, Tool, StrokeStyle } from "@/canvas/Canvas";
-import React from "react";
-import { Separator } from "./ui/separator";
+import { bgFill, strokeFill, strokeWidth, Tool, StrokeStyle } from "@/canvas/Canvas"
+import React from "react"
 
 interface SidebarProps {
-    activeTool: Tool;
-    strokeFill: strokeFill;
-    setStrokeFill: React.Dispatch<React.SetStateAction<strokeFill>>;
-    strokeWidth: strokeWidth;
-    setStrokeWidth: React.Dispatch<React.SetStateAction<strokeWidth>>;
-    bgFill: bgFill;
-    setBgFill: React.Dispatch<React.SetStateAction<bgFill>>;
-    opacity: number;
-    setOpacity: React.Dispatch<React.SetStateAction<number>>;
-    strokeStyle: StrokeStyle;
-    setStrokeStyle: React.Dispatch<React.SetStateAction<StrokeStyle>>;
-    fontSize: number;
-    setFontSize: React.Dispatch<React.SetStateAction<number>>;
+  activeTool: Tool
+  strokeFill: strokeFill
+  setStrokeFill: React.Dispatch<React.SetStateAction<strokeFill>>
+  strokeWidth: strokeWidth
+  setStrokeWidth: React.Dispatch<React.SetStateAction<strokeWidth>>
+  bgFill: bgFill
+  setBgFill: React.Dispatch<React.SetStateAction<bgFill>>
+  opacity: number
+  setOpacity: React.Dispatch<React.SetStateAction<number>>
+  strokeStyle: StrokeStyle
+  setStrokeStyle: React.Dispatch<React.SetStateAction<StrokeStyle>>
+  fontSize: number
+  setFontSize: React.Dispatch<React.SetStateAction<number>>
 }
 
 export const Sidebar = ({
-    activeTool,
-    strokeFill,
-    setStrokeFill,
-    strokeWidth,
-    setStrokeWidth,
-    bgFill,
-    setBgFill,
-    opacity,
-    setOpacity,
-    strokeStyle,
-    setStrokeStyle,
-    fontSize,
-    setFontSize,
+  activeTool,
+  strokeFill,
+  setStrokeFill,
+  strokeWidth,
+  setStrokeWidth,
+  bgFill,
+  setBgFill,
+  opacity,
+  setOpacity,
+  strokeStyle,
+  setStrokeStyle,
+  fontSize,
+  setFontSize,
 }: SidebarProps) => {
-    const strokeFills: strokeFill[] = [
-        "rgba(211, 211, 211)",
-        "rgba(242, 154, 158)",
-        "rgba(77, 161, 83)",
-        "rgba(98, 177, 247)",
-        "rgba(183, 98, 42)",
-    ];
+  const strokeFills: strokeFill[] = [
+    "rgba(211, 211, 211)",
+    "rgba(242, 154, 158)",
+    "rgba(77, 161, 83)",
+    "rgba(98, 177, 247)",
+    "rgba(183, 98, 42)",
+  ]
 
-    const strokeWidths: strokeWidth[] = [1, 2, 4]
+  const strokeWidths: strokeWidth[] = [1, 2, 4]
 
-    const bgFills: bgFill[] = [
-        "rgba(0, 0, 0, 0)",
-        "rgba(89, 49, 49)",
-        "rgba(23, 61, 16)",
-        "rgba(30, 70, 101)",
-        "rgba(49, 37, 7)",
-    ];
+  const bgFills: bgFill[] = [
+    "rgba(0, 0, 0, 0)",
+    "rgba(89, 49, 49)",
+    "rgba(23, 61, 16)",
+    "rgba(30, 70, 101)",
+    "rgba(49, 37, 7)",
+  ]
 
-    const strokeStyles: StrokeStyle[] = ["solid", "dashed", "dotted"];
+  const strokeStyles: StrokeStyle[] = ["solid", "dashed", "dotted"]
 
-    if(activeTool === "erase" || activeTool === "grab" || activeTool === "select"){
-        return ;
-    }
+  if (activeTool === "erase" || activeTool === "grab" || activeTool === "select") {
+    return null
+  }
 
-    return (
-        <div className="fixed left-10 top-[50%] bg-[#232329] px-3 py-4 rounded-md -translate-y-[50%] w-fit max-h-[80vh] overflow-y-auto text-white z-40">
-            <div className="flex flex-col gap-4 justify-start items-start w-full">
-                {/* Stroke Color */}
-                <div>
-                <p className="text-sm text-white/70 mb-2">Stroke</p>
-                <div className="flex gap-2 h-7 items-center flex-wrap max-w-[200px]">
-                    {strokeFills.map((fill, index) => (
-                        <ColorFillIndicator
-                            key={index}
-                            color={fill}
-                            onClick={() => setStrokeFill(fill)}
-                            isActive={strokeFill === fill}
-                        />
-                    ))}
-                </div>
-                </div>
+  return (
+    <aside className="fixed right-5 top-24 z-40 w-64 rounded-2xl border border-white/15 bg-[#1f2026]/95 p-4 text-white shadow-xl backdrop-blur">
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-sm font-semibold tracking-wide text-white/95">Style</p>
+        <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] uppercase text-white/60">{activeTool}</span>
+      </div>
 
-                {/* Background Color - only for shapes with fill */}
-                {(activeTool === "rect" || activeTool === "ellipse" || activeTool === "diamond" || activeTool === "triangle") && (
-                    <div>
-                    <p className="text-sm text-white/70 mb-2">Background</p>
-                    <div className="flex gap-2 h-7 items-center flex-wrap max-w-[200px]">
-                        {bgFills.map((fill, index) => (
-                            <ColorBgIndicator
-                                key={index}
-                                color={fill}
-                                onClick={() => setBgFill(fill)}
-                                isActive={bgFill === fill}
-                            />
-                        ))}
-                    </div>
-                    </div>
-                )}
+      <div className="space-y-4">
+        <ControlBlock label="Stroke">
+          <div className="flex flex-wrap gap-2">
+            {strokeFills.map((fill) => (
+              <ColorIndicator
+                key={fill}
+                color={fill}
+                onClick={() => setStrokeFill(fill)}
+                isActive={strokeFill === fill}
+                ariaLabel={`Set stroke color ${fill}`}
+              />
+            ))}
+          </div>
+        </ControlBlock>
 
-                {/* Stroke Width */}
-                <div>
-                <p className="text-sm text-white/70 mb-2">Stroke Width</p>
-                <div className="flex gap-2 h-7 items-center">
-                    {strokeWidths.map((width, index) => (
-                        <StrokeWidthIndicator
-                            key={index}
-                            strokeWidth={width}
-                            onClick={() => setStrokeWidth(width)}
-                            isActive={strokeWidth === width}
-                        />
-                    ))}
-                </div>
-                </div>
-
-                {/* Stroke Style */}
-                {activeTool !== "pencil" && activeTool !== "text" && (
-                    <div>
-                    <p className="text-sm text-white/70 mb-2">Stroke Style</p>
-                    <div className="flex gap-2">
-                        {strokeStyles.map((style) => (
-                            <button
-                                key={style}
-                                onClick={() => setStrokeStyle(style)}
-                                className={`px-3 py-1 rounded text-xs capitalize ${
-                                    strokeStyle === style 
-                                        ? "bg-white/20 text-white" 
-                                        : "bg-white/5 text-white/60 hover:bg-white/10"
-                                }`}
-                            >
-                                {style}
-                            </button>
-                        ))}
-                    </div>
-                    </div>
-                )}
-
-                {/* Opacity */}
-                <div className="w-full">
-                <p className="text-sm text-white/70 mb-2">Opacity: {Math.round(opacity * 100)}%</p>
-                <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.1"
-                    value={opacity}
-                    onChange={(e) => setOpacity(parseFloat(e.target.value))}
-                    className="w-full accent-white"
+        {(activeTool === "rect" ||
+          activeTool === "ellipse" ||
+          activeTool === "diamond" ||
+          activeTool === "triangle") && (
+          <ControlBlock label="Background">
+            <div className="flex flex-wrap gap-2">
+              {bgFills.map((fill) => (
+                <ColorIndicator
+                  key={fill}
+                  color={fill}
+                  onClick={() => setBgFill(fill)}
+                  isActive={bgFill === fill}
+                  transparent={fill === "rgba(0, 0, 0, 0)"}
+                  ariaLabel={`Set fill color ${fill}`}
                 />
-                </div>
-
-                {/* Font Size - only for text tool */}
-                {activeTool === "text" && (
-                    <div className="w-full">
-                    <p className="text-sm text-white/70 mb-2">Font Size: {fontSize}px</p>
-                    <input
-                        type="range"
-                        min="12"
-                        max="72"
-                        step="2"
-                        value={fontSize}
-                        onChange={(e) => setFontSize(parseInt(e.target.value))}
-                        className="w-full accent-white"
-                    />
-                    </div>
-                )}
+              ))}
             </div>
-        </div>
-    );
-};
+          </ControlBlock>
+        )}
 
-const ColorFillIndicator = ({
-    color,
-    onClick,
-    isActive,
-}: {
-    color: strokeFill;
-    onClick?: () => void;
-    isActive?: boolean;
-}) => {
-    return (
-        <div
-            className={`w-[1.4rem] h-[1.4rem] rounded-sm cursor-pointer hover:border-2 transition-all ${
-                isActive ? "border-2 border-white" : "border border-white/30"
-            }`}
-            style={{ backgroundColor: color }}
-            onClick={onClick}
-        >
-            
-        </div>
-    );
-};
+        <ControlBlock label="Stroke Width">
+          <div className="flex gap-2">
+            {strokeWidths.map((width) => (
+              <button
+                key={width}
+                type="button"
+                onClick={() => setStrokeWidth(width)}
+                className={`flex h-8 w-10 items-center justify-center rounded border transition-colors ${
+                  strokeWidth === width
+                    ? "border-blue-400/70 bg-blue-500/20"
+                    : "border-white/15 bg-white/5 hover:border-white/30 hover:bg-white/10"
+                }`}
+                aria-label={`Set stroke width ${width}`}
+              >
+                <span style={{ height: `${width}px` }} className="w-6 bg-white/85" />
+              </button>
+            ))}
+          </div>
+        </ControlBlock>
 
-const ColorBgIndicator = ({
-    color,
-    onClick,
-    isActive,
-}: {
-    color: bgFill;
-    onClick?: () => void;
-    isActive?: boolean;
-}) => {
-    return (
-        <div
-       className={`w-[1.4rem] h-[1.4rem] rounded-sm cursor-pointer hover:border-2 transition-all ${
-           isActive ? "border-2 border-white" : 
-           color === "rgba(0, 0, 0, 0)" ? "border border-white/30" : "border border-white/10"
-       }`}
-           style={{ backgroundColor: color }}
-            onClick={onClick}
-        ></div>
-    );
-};
+        {activeTool !== "pencil" && activeTool !== "text" && (
+          <ControlBlock label="Stroke Style">
+            <div className="grid grid-cols-3 gap-2">
+              {strokeStyles.map((style) => (
+                <button
+                  key={style}
+                  type="button"
+                  onClick={() => setStrokeStyle(style)}
+                  className={`rounded-md border px-2 py-1 text-xs capitalize transition-colors ${
+                    strokeStyle === style
+                      ? "border-blue-400/70 bg-blue-500/20 text-white"
+                      : "border-white/15 bg-white/5 text-white/70 hover:border-white/30 hover:bg-white/10"
+                  }`}
+                >
+                  {style}
+                </button>
+              ))}
+            </div>
+          </ControlBlock>
+        )}
 
+        <ControlBlock label={`Opacity ${Math.round(opacity * 100)}%`}>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.1"
+            value={opacity}
+            onChange={(e) => setOpacity(Number.parseFloat(e.target.value))}
+            className="w-full accent-blue-300"
+          />
+        </ControlBlock>
 
-const StrokeWidthIndicator = ({
-    strokeWidth, 
-    onClick,
-    isActive
-}: {
-    strokeWidth: strokeWidth, 
-    onClick?: () => void,
-    isActive?: boolean
-}) => {
-   return <div
-    className={`w-[1.4rem] h-[1.4rem] rounded-sm cursor-pointer transition-all flex items-center ${
-        isActive ? "border-2 border-white" : "border border-white/10 hover:border-white/30"
-    }`}
-         onClick={onClick}
-     >
-        <div
-                style={{ height: `${strokeWidth}px` }}
-                className="w-full bg-white/80"
+        {activeTool === "text" && (
+          <ControlBlock label={`Font Size ${fontSize}px`}>
+            <input
+              type="range"
+              min="12"
+              max="72"
+              step="2"
+              value={fontSize}
+              onChange={(e) => setFontSize(Number.parseInt(e.target.value, 10))}
+              className="w-full accent-blue-300"
             />
-    </div>
+          </ControlBlock>
+        )}
+      </div>
+    </aside>
+  )
+}
+
+const ControlBlock = ({ label, children }: { label: string; children: React.ReactNode }) => {
+  return (
+    <section>
+      <p className="mb-2 text-xs uppercase tracking-wide text-white/60">{label}</p>
+      {children}
+    </section>
+  )
+}
+
+const ColorIndicator = ({
+  color,
+  onClick,
+  isActive,
+  ariaLabel,
+  transparent,
+}: {
+  color: string
+  onClick: () => void
+  isActive: boolean
+  ariaLabel: string
+  transparent?: boolean
+}) => {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={ariaLabel}
+      className={`h-6 w-6 rounded-md border transition-colors ${
+        isActive
+          ? "border-blue-300 shadow-[0_0_0_1px_rgba(147,197,253,0.65)]"
+          : transparent
+            ? "border-white/40"
+            : "border-white/15 hover:border-white/30"
+      }`}
+      style={{ backgroundColor: color }}
+    />
+  )
 }

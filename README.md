@@ -72,8 +72,8 @@ pnpm dev
 This will concurrently start:
 
 - **Frontend**: http://localhost:3000 (Next.js)
-- **HTTP Backend**: http://localhost:8080 (Express)
-- **WS Backend**: WebSocket server for real-time collaboration.
+- **HTTP Backend**: http://localhost:3001 (Express)
+- **WS Backend**: WebSocket server for real-time collaboration on port 8080.
 
 ## Database Management
 

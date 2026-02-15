@@ -11,7 +11,7 @@ import {
   Monitor
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "./ui/button";
+import { Button } from "@repo/ui/button";
 
 interface SidebarItemProps {
   href: string;

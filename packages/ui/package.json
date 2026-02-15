@@ -4,9 +4,15 @@
   "type": "module",
   "private": true,
   "exports": {
+    "./avatar": "./src/avatar.tsx",
     "./button": "./src/button.tsx",
     "./card": "./src/card.tsx",
-    "./code": "./src/code.tsx"
+    "./code": "./src/code.tsx",
+    "./form": "./src/form.tsx",
+    "./input": "./src/input.tsx",
+    "./label": "./src/label.tsx",
+    "./separator": "./src/separator.tsx",
+    "./squares-background": "./src/squares-background.tsx"
   },
   "scripts": {
     "lint": "eslint . --max-warnings 0",
@@ -23,7 +29,15 @@
     "typescript": "5.5.4"
   },
   "dependencies": {
+    "@radix-ui/react-avatar": "^1.1.2",
+    "@radix-ui/react-label": "^2.1.1",
+    "@radix-ui/react-separator": "^1.1.1",
+    "@radix-ui/react-slot": "^1.1.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.54.2",
+    "tailwind-merge": "^2.6.0"
   }
 }

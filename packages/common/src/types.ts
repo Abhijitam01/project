@@ -23,4 +23,6 @@ export const CreateRoomSchema = z.object({
     roomName : z.string().min(1 , {
         message: "RoomName is required!"
     })
+    .max(50, { message: "RoomName is too long" }),
+    isPrivate: z.boolean().optional()
 })

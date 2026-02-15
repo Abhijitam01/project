@@ -6,94 +6,110 @@ import jwt from "jsonwebtoken"
 import 'dotenv/config'
 import cors from "cors"
 import { middleware } from "./middleware";
+import { randomBytes } from "crypto"
 
 const app = express()
 
 app.use(express.json())
 app.use(cors())
 
+if (!process.env.JWT_SECRET) {
+    throw new Error("JWT_SECRET is required")
+}
 
 
 app.post("/signup", async (req, res)=> {
     const validatedFields = RegisterSchema.safeParse(req.body)
 
     if(!validatedFields.success){
-        res.json({
+        res.status(400).json({
             error: "Invalid Fields"
         })
         return;
     }
 
-    const {username, email, password} = validatedFields.data
+    try {
+        const {username, email, password} = validatedFields.data
 
-    const hashedPassword = await brcypt.hash(password , 10)
+        const hashedPassword = await brcypt.hash(password , 10)
 
-    const existingUser = await prismaClient.user.findUnique({
-        where:{
-            email
-        }
-    })
-
-    if(existingUser){
-        res.json({
-            error: "User Already Exists!"
+        const existingUser = await prismaClient.user.findUnique({
+            where:{
+                email
+            }
         })
-        return;
-    }
 
-    const user = await prismaClient.user.create({
-        data: {
-            username,
-            email,
-            password: hashedPassword
+        if(existingUser){
+            res.status(409).json({
+                error: "User Already Exists!"
+            })
+            return;
         }
-    })
+
+        const user = await prismaClient.user.create({
+            data: {
+                username,
+                email,
+                password: hashedPassword
+            }
+        })
 
 
-    res.json({
-        user
-    })
+        res.status(201).json({
+            user: {
+                id: user.id,
+                username: user.username,
+                email: user.email
+            }
+        })
+    } catch (e) {
+        res.status(500).json({ error: "Internal Server Error" })
+    }
 })
 
 app.post("/signin", async (req,res)=> {
     const validatedFields = LoginSchema.safeParse(req.body)
 
     if(!validatedFields || !validatedFields.success || !validatedFields.data.password){
-        res.json({
+        res.status(400).json({
             error: "Invalid Fields!"
         })
         return;
     }
 
-    const {email, password} = validatedFields.data
+    try {
+        const {email, password} = validatedFields.data
 
-    const user  = await prismaClient.user.findUnique({
-        where:{
-            email
+        const user  = await prismaClient.user.findUnique({
+            where:{
+                email
+            }
+        })
+
+        if(!user){
+            res.status(404).json({
+                error: "User does not exist!"
+            })
+            return;
         }
-    })
 
-    if(!user){
+        const matchPassword  = await brcypt.compare(password , user.password)
+
+        if(!matchPassword){
+            res.status(401).json({
+                error: "Invalid Credentials!"
+            })
+            return;
+        }
+
+        const token = jwt.sign({userId : user.id} , process.env.JWT_SECRET!)
+
         res.json({
-            error: "User does not exist!"
+            token
         })
-        return;
+    } catch (e) {
+        res.status(500).json({ error: "Internal Server Error" })
     }
-
-    const matchPassword  = await brcypt.compare(password , user.password)
-
-    if(!matchPassword){
-        res.json({
-            error: "Invalid Credentials!"
-        })
-        return;
-    }
-
-    const token = jwt.sign({userId : user.id} , process.env.JWT_SECRET! || "123123")
-
-    res.json({
-        token
-    })
 
 })
 
@@ -102,88 +118,120 @@ app.post("/room", middleware , async (req, res)=> {
     const validRoom = CreateRoomSchema.safeParse(req.body)
 
     if(!validRoom.success){
-        res.json({
+        res.status(400).json({
             error: "Invalid Room Name"
         })
         return;
     }
 
-    const userId = req.userId
+    try {
+        const userId = req.userId
 
-    if(!userId){
-        res.json({
-            error: "User doesn't exist!"
-        })
-        return;
-    }
-
-
-    const { roomName } = validRoom.data
-
-    const existingRoom = await prismaClient.room.findFirst({
-        where: {
-            roomName
+        if(!userId){
+            res.status(401).json({
+                error: "User doesn't exist!"
+            })
+            return;
         }
-    })
 
-    if(existingRoom){
-        res.json({
-            error: "Room already exists!"
+
+        const { roomName, isPrivate } = validRoom.data
+
+        const inviteCode = isPrivate ? randomBytes(4).toString("hex") : null
+
+        const existingRoom = await prismaClient.room.findFirst({
+            where: {
+                roomName
+            }
         })
-        return;
-    }
 
-
-
-    const room = await prismaClient.room.create({
-        data: {
-            roomName,
-            userId
+        if(existingRoom){
+            res.status(409).json({
+                error: "Room already exists!"
+            })
+            return;
         }
-    })
 
-    res.json({
-        room
-    })
+
+
+        const room = await prismaClient.room.create({
+            data: {
+                roomName,
+                userId,
+                isPrivate: Boolean(isPrivate),
+                inviteCode
+            }
+        })
+
+        res.status(201).json({
+            room
+        })
+    } catch (e) {
+        res.status(500).json({ error: "Internal Server Error" })
+    }
 })
 
 app.get("/room/:roomName", async (req, res)=> {
-    const roomName = req.params.roomName
+    try {
+        const roomName = req.params.roomName
 
-    const room = await prismaClient.room.findFirst({
-        where:{
-            roomName
-        },
-        include: {
-            shape: true
+        const room = await prismaClient.room.findFirst({
+            where:{
+                roomName
+            },
+            include: {
+                shape: true
+            }
+        })
+
+        if(!room){
+            res.status(404).json({
+                error: "Room not found"
+            })
+            return;
         }
-    })
 
-    res.json({
-        room
-    })
+        const invite = typeof req.query.invite === "string" ? req.query.invite : undefined
+        const payloadRoom = {
+            ...room,
+            inviteCode: room.isPrivate && room.inviteCode === invite ? room.inviteCode : undefined
+        }
+
+        res.json({ room: payloadRoom })
+    } catch (e) {
+        res.status(500).json({ error: "Internal Server Error" })
+    }
 
 })
 
 app.get("/user", middleware , async (req, res)=>{
-    const userId = req.userId
+    try {
+        const userId = req.userId
 
-    const user = await prismaClient.user.findUnique({
-        where:{
-            id: userId
-        },
-        select:{
-            username: true,
-            id: true,
-            email: true,
-            room: true,
-            shapes: true
+        const user = await prismaClient.user.findUnique({
+            where:{
+                id: userId
+            },
+            select:{
+                username: true,
+                id: true,
+                email: true,
+                room: true,
+                shapes: true
+            }
+        })
+
+        if(!user){
+            res.status(404).json({
+                error: "User not found"
+            })
+            return;
         }
-    })
 
-    res.json({
-        user
-    })
+        res.json({ user })
+    } catch (e) {
+        res.status(500).json({ error: "Internal Server Error" })
+    }
 })
 
 
@@ -192,4 +240,3 @@ app.get("/user", middleware , async (req, res)=>{
 app.listen(3001, ()=>{
     console.log("Listening")
 })
-

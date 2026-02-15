@@ -21,7 +21,7 @@ const Dashboard = () => {
             <span className="text-sm font-bold text-primary uppercase tracking-widest">Welcome Back</span>
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight lg:text-5xl mb-4">
-            Hello, <span className="text-primary">{user?.user?.name || "Designer"}</span>
+            Hello, <span className="text-primary">{user?.user?.username || "Designer"}</span>
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl">
             Pick up where you left off or start a fresh canvas for your next big idea.
