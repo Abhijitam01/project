@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from "./ui/card";
-import { Button } from "./ui/button";
+import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from "@repo/ui/card";
+import { Button } from "@repo/ui/button";
 import { ArrowRight, Users, Hash } from "lucide-react";
 
 interface Room {

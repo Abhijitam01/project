@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 
-export const useSocket = (roomId: string | null) => {
+export const useSocket = (roomId: string | null, inviteCode?: string | null) => {
   const [socket, setSocket] = useState<WebSocket | null>(null);
 
   useEffect(() => {
@@ -13,14 +13,21 @@ export const useSocket = (roomId: string | null) => {
       return;
     }
 
-    const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL}?token=${token}`);
+    if (!process.env.NEXT_PUBLIC_WS_URL) {
+      console.error("NEXT_PUBLIC_WS_URL is not set");
+      return;
+    }
+
+    const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL}/?token=${token}`);
 
     ws.onopen = () => {
       console.log("WebSocket connection opened");
       setSocket(ws);
+      const storedInvite = inviteCode ?? localStorage.getItem(`drawr:invite:${roomId}`) ?? "";
       const data = JSON.stringify({
         type: "join_room",
-        roomId: roomId,
+        roomId,
+        invite: storedInvite,
       });
       ws.send(data);
     };
@@ -39,10 +46,16 @@ export const useSocket = (roomId: string | null) => {
 
     return () => {
       if (ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: "leave_room",
+            roomId,
+          })
+        );
         ws.close();
       }
     };
-  }, [roomId]); // Dependency array includes roomId
+  }, [roomId, inviteCode]); // Dependency array includes roomId
 
   return socket;
 };

@@ -12,7 +12,7 @@ export const register = async (values: z.infer<typeof RegisterSchema>) => {
         body: JSON.stringify(values),
     })
 
-    if (res.status === 200) {
+    if (res.ok) {
         return res.json()
     }
 

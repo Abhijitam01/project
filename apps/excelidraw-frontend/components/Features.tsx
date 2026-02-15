@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "motion/react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@repo/ui/card"
 import { PenTool, Share2, Users, Layers, Zap, Lock, Globe, Palette } from "lucide-react"
 
 const features = [

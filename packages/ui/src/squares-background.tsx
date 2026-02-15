@@ -34,7 +34,6 @@ export function Squares({
     const ctx = canvas.getContext("2d")
     if (!ctx) return
 
-    // Set canvas background
     canvas.style.background = "#ffffff"
 
     const resizeCanvas = () => {
@@ -80,7 +79,7 @@ export function Squares({
         0,
         canvas.width / 2,
         canvas.height / 2,
-        Math.sqrt(Math.pow(canvas.width, 2) + Math.pow(canvas.height, 2)) / 2,
+        Math.sqrt(Math.pow(canvas.width, 2) + Math.pow(canvas.height, 2)) / 2
       )
       gradient.addColorStop(0, "rgba(255,255, 255, 0)")
       gradient.addColorStop(1, "#ffffff")
@@ -94,26 +93,20 @@ export function Squares({
 
       switch (direction) {
         case "right":
-          gridOffset.current.x =
-            (gridOffset.current.x - effectiveSpeed + squareSize) % squareSize
+          gridOffset.current.x = (gridOffset.current.x - effectiveSpeed + squareSize) % squareSize
           break
         case "left":
-          gridOffset.current.x =
-            (gridOffset.current.x + effectiveSpeed + squareSize) % squareSize
+          gridOffset.current.x = (gridOffset.current.x + effectiveSpeed + squareSize) % squareSize
           break
         case "up":
-          gridOffset.current.y =
-            (gridOffset.current.y + effectiveSpeed + squareSize) % squareSize
+          gridOffset.current.y = (gridOffset.current.y + effectiveSpeed + squareSize) % squareSize
           break
         case "down":
-          gridOffset.current.y =
-            (gridOffset.current.y - effectiveSpeed + squareSize) % squareSize
+          gridOffset.current.y = (gridOffset.current.y - effectiveSpeed + squareSize) % squareSize
           break
         case "diagonal":
-          gridOffset.current.x =
-            (gridOffset.current.x - effectiveSpeed + squareSize) % squareSize
-          gridOffset.current.y =
-            (gridOffset.current.y - effectiveSpeed + squareSize) % squareSize
+          gridOffset.current.x = (gridOffset.current.x - effectiveSpeed + squareSize) % squareSize
+          gridOffset.current.y = (gridOffset.current.y - effectiveSpeed + squareSize) % squareSize
           break
       }
 
@@ -129,12 +122,8 @@ export function Squares({
       const startX = Math.floor(gridOffset.current.x / squareSize) * squareSize
       const startY = Math.floor(gridOffset.current.y / squareSize) * squareSize
 
-      const hoveredSquareX = Math.floor(
-        (mouseX + gridOffset.current.x - startX) / squareSize,
-      )
-      const hoveredSquareY = Math.floor(
-        (mouseY + gridOffset.current.y - startY) / squareSize,
-      )
+      const hoveredSquareX = Math.floor((mouseX + gridOffset.current.x - startX) / squareSize)
+      const hoveredSquareY = Math.floor((mouseY + gridOffset.current.y - startY) / squareSize)
 
       setHoveredSquare({ x: hoveredSquareX, y: hoveredSquareY })
     }
@@ -143,16 +132,13 @@ export function Squares({
       setHoveredSquare(null)
     }
 
-    // Event listeners
     window.addEventListener("resize", resizeCanvas)
     canvas.addEventListener("mousemove", handleMouseMove)
     canvas.addEventListener("mouseleave", handleMouseLeave)
 
-    // Initial setup
     resizeCanvas()
     requestRef.current = requestAnimationFrame(updateAnimation)
 
-    // Cleanup
     return () => {
       window.removeEventListener("resize", resizeCanvas)
       canvas.removeEventListener("mousemove", handleMouseMove)
@@ -163,10 +149,5 @@ export function Squares({
     }
   }, [direction, speed, borderColor, hoverFillColor, hoveredSquare, squareSize])
 
-  return (
-    <canvas
-      ref={canvasRef}
-      className={`w-full h-full border-none block ${className}`}
-    />
-  )
+  return <canvas ref={canvasRef} className={`w-full h-full border-none block ${className}`} />
 }

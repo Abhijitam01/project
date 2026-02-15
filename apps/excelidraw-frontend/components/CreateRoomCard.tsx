@@ -6,17 +6,18 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CreateRoomSchema } from "@repo/common/types";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@repo/ui/card";
 import {
   Form,
   FormControl,
   FormField,
   FormItem,
   FormLabel,
+  FormDescription,
   FormMessage,
-} from "./ui/form";
-import { Input } from "./ui/input";
-import { Button } from "./ui/button";
+} from "@repo/ui/form";
+import { Input } from "@repo/ui/input";
+import { Button } from "@repo/ui/button";
 import { Plus, Loader2, Sparkles } from "lucide-react";
 
 export function CreateRoomCard() {
@@ -28,6 +29,7 @@ export function CreateRoomCard() {
     resolver: zodResolver(CreateRoomSchema),
     defaultValues: {
       roomName: "",
+      isPrivate: false,
     },
   });
 
@@ -56,8 +58,8 @@ export function CreateRoomCard() {
       if (responseData.error) {
         setError(responseData.error);
       } else {
-        // Automatically redirect to the new room
-        router.push(`/room/${values.roomName}`);
+        const inviteQuery = responseData.room?.inviteCode ? `?invite=${responseData.room.inviteCode}` : "";
+        router.push(`/room/${values.roomName}${inviteQuery}`);
       }
     } catch (err) {
       setError((err as Error).message || "Unexpected error occurred");
@@ -99,6 +101,29 @@ export function CreateRoomCard() {
                   </FormControl>
                   <FormMessage className="text-destructive font-medium" />
                   {error && <p className="text-sm text-destructive font-medium mt-2">{error}</p>}
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="isPrivate"
+              render={({ field }) => (
+                <FormItem className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <FormLabel className="font-semibold text-foreground/80">Private Room</FormLabel>
+                    <FormControl>
+                      <input
+                        type="checkbox"
+                        checked={field.value}
+                        onChange={(event) => field.onChange(event.target.checked)}
+                        disabled={isSubmitting}
+                        className="h-4 w-4 accent-primary"
+                      />
+                    </FormControl>
+                  </div>
+                  <FormDescription className="text-xs text-muted-foreground">
+                    Requires the invite link for others to join.
+                  </FormDescription>
                 </FormItem>
               )}
             />

@@ -1,9 +1,9 @@
 "use client"
 
 import { motion } from "motion/react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@repo/ui/card"
 import { Check } from "lucide-react"
-import { Button } from "./ui/button"
+import { Button } from "@repo/ui/button"
 import Link from "next/link"
 
 const plans = [

@@ -13,7 +13,7 @@ export const login = async (values: z.infer<typeof LoginSchema>) => {
         body: JSON.stringify(values)
     })
 
-    if(res.status === 200){
+    if(res.ok){
        return res.json()
     }
    

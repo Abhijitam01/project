@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 
 interface User {
     user : {id: string;
-    name: string;
+    username: string;
     room: {
       id: string;
       roomName: string;
@@ -19,7 +19,7 @@ interface User {
   
 
 export const useUser = () : UseUserResponse => {
-    const [user, setUser] = useState()
+    const [user, setUser] = useState<User | undefined>(undefined)
     const [isLoading , setIsLoading] = useState(false)
     const [error, setError] = useState(null)
 
@@ -44,6 +44,8 @@ export const useUser = () : UseUserResponse => {
             
            }
            catch(err : any){
+            setUser(undefined)
+            setError(err?.message || "Something went wrong")
            }
            finally{
             setIsLoading(false)

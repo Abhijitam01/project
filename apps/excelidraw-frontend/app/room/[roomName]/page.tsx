@@ -2,20 +2,28 @@ import { getRoom } from "@/actions/getRoom"
 import { RoomCanvas } from "@/canvas/RoomCanvas"
 
 interface PageProps {
-    params: Promise<{
+    params: {
         roomName: string
-    }>
+    }
+    searchParams: {
+        invite?: string
+    }
 }
 
-const page = async ({params}: PageProps) => {
-    const { roomName } = await params
-    const room = await getRoom(roomName)
+const page = async ({params, searchParams}: PageProps) => {
+    const { roomName } = params
+    try {
+        const room = await getRoom(roomName, searchParams?.invite)
 
-    if(!room){
-        return <p>The room doesn&apos;t exist</p>
+        if(!room){
+            return <p>The room doesn&apos;t exist</p>
+        }
+
+        const inviteToken = searchParams?.invite || room.inviteCode || null
+        return <RoomCanvas roomId={room.id} room={room} inviteCode={inviteToken} />
+    } catch (error) {
+        return <p>Error loading room: {(error as Error).message}</p>
     }
-
-    return <RoomCanvas roomId={room.id} room={room} />
 }
 
 export default page
