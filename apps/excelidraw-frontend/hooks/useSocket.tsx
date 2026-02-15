@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { safeStorageGet } from "@/lib/storage";
 
 export const useSocket = (roomId: string | null, inviteCode?: string | null) => {
   const [socket, setSocket] = useState<WebSocket | null>(null);
@@ -7,7 +8,7 @@ export const useSocket = (roomId: string | null, inviteCode?: string | null) => 
   useEffect(() => {
     if (!roomId) return; // Do nothing if roomId is null
 
-    const token = localStorage.getItem("token");
+    const token = safeStorageGet("token");
     if (!token) {
       console.error("Token is missing from localStorage");
       return;
@@ -22,7 +23,7 @@ export const useSocket = (roomId: string | null, inviteCode?: string | null) => 
 
     ws.onopen = () => {
       setSocket(ws);
-      const storedInvite = inviteCode ?? localStorage.getItem(`drawr:invite:${roomId}`) ?? "";
+      const storedInvite = inviteCode ?? safeStorageGet(`drawr:invite:${roomId}`) ?? "";
       const data = JSON.stringify({
         type: "join_room",
         roomId,

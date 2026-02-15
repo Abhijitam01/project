@@ -17,6 +17,7 @@ import {
 import { Input } from "@repo/ui/input"
 import { Button } from "@repo/ui/button"
 import { useState } from "react"
+import { safeStorageGet } from "@/lib/storage"
 
 export function CreateRoomForm() {
   const [error, setError] = useState("")
@@ -33,31 +34,42 @@ export function CreateRoomForm() {
     setError("")
     setSuccessRoom(null)
 
-    const token = localStorage.getItem("token")
+    const token = safeStorageGet("token")
+    if (!token) {
+      setError("You are not authenticated. Please sign in.")
+      return
+    }
+
+    if (!process.env.NEXT_PUBLIC_HTTP_URL) {
+      setError("Client config is missing NEXT_PUBLIC_HTTP_URL.")
+      return
+    }
 
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_HTTP_URL}/room`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `${token}`,
+          authorization: token,
         },
         body: JSON.stringify(values),
       })
 
+      const responseData = (await response.json().catch(() => null)) as
+        | { error?: string; message?: string; room?: { roomName?: string } }
+        | null
+
       if (!response.ok) {
-        throw new Error("Something went wrong!")
+        throw new Error(responseData?.error || responseData?.message || "Unable to create room")
       }
 
-      const responseData = await response.json()
-
-      if (responseData.error) {
+      if (responseData?.error) {
         setError(responseData.error)
       } else {
         setSuccessRoom(values.roomName)
       }
-    } catch (err) {
-      setError((err as Error).message || "Unexpected error occurred")
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Unexpected error occurred")
     }
   }
 

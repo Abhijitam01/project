@@ -5,9 +5,18 @@ import { useUser } from "@/hooks/useUser";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@repo/ui/button";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-export function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, error } = useUser();
+export function DashboardLayout({ children }: { children: (username: string, rooms: { id: string; roomName: string }[]) => React.ReactNode }) {
+  const { user, isLoading, error, reload } = useUser();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (error === "AUTH_REQUIRED") {
+      router.replace("/signin");
+    }
+  }, [error, router]);
 
   if (isLoading) {
     return (
@@ -20,6 +29,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
+  if (error === "AUTH_REQUIRED") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Redirecting to sign in...</p>
+      </div>
+    );
+  }
+
   if (error || !user) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 text-center">
@@ -27,21 +44,26 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <p className="text-xl text-muted-foreground mb-8 max-w-md">
           {error?.toString() || "We couldn't find your user information. Please try logging in again."}
         </p>
-        <Link href="/signin">
-          <Button size="lg" className="px-8">
-            Go to Sign In
+        <div className="flex items-center gap-3">
+          <Button size="lg" className="px-8" onClick={() => void reload()}>
+            Retry
           </Button>
-        </Link>
+          <Link href="/signin">
+            <Button size="lg" variant="outline" className="px-8">
+              Go to Sign In
+            </Button>
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <DashboardSidebar />
+      <DashboardSidebar username={user.username} />
       <main className="pl-64 min-h-screen">
         <div className="max-w-7xl mx-auto p-8">
-          {children}
+          {children(user.username, user.room)}
         </div>
       </main>
     </div>

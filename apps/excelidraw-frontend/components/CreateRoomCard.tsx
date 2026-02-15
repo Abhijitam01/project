@@ -19,6 +19,7 @@ import {
 import { Input } from "@repo/ui/input";
 import { Button } from "@repo/ui/button";
 import { Plus, Loader2, Sparkles } from "lucide-react";
+import { safeStorageGet } from "@/lib/storage";
 
 export function CreateRoomCard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -37,32 +38,46 @@ export function CreateRoomCard() {
     setIsSubmitting(true);
     setError("");
 
-    const token = localStorage.getItem("token");
+    const token = safeStorageGet("token");
+    if (!token) {
+      setError("You are not authenticated. Please sign in again.");
+      setIsSubmitting(false);
+      router.replace("/signin");
+      return;
+    }
+
+    if (!process.env.NEXT_PUBLIC_HTTP_URL) {
+      setError("Client config is missing NEXT_PUBLIC_HTTP_URL.");
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_HTTP_URL}/room`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `${token}`,
+          authorization: token,
         },
         body: JSON.stringify(values),
       });
 
-      const responseData = await response.json();
+      const responseData = (await response.json().catch(() => null)) as
+        | { room?: { inviteCode?: string | null }; error?: string; message?: string }
+        | null;
 
       if (!response.ok) {
-        throw new Error(responseData.message || "Something went wrong!");
+        throw new Error(responseData?.error || responseData?.message || "Unable to create room");
       }
 
-      if (responseData.error) {
+      if (responseData?.error) {
         setError(responseData.error);
       } else {
-        const inviteQuery = responseData.room?.inviteCode ? `?invite=${responseData.room.inviteCode}` : "";
+        const inviteQuery = responseData?.room?.inviteCode ? `?invite=${responseData.room.inviteCode}` : "";
         router.push(`/room/${values.roomName}${inviteQuery}`);
       }
-    } catch (err) {
-      setError((err as Error).message || "Unexpected error occurred");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Unexpected error occurred");
     } finally {
       setIsSubmitting(false);
     }

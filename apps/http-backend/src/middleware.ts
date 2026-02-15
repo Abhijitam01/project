@@ -6,6 +6,7 @@ declare global{
     namespace Express{
         interface Request{
             userId?: string
+            requestId?: string
         }
     }
 }
@@ -19,8 +20,8 @@ export const middleware = (req: Request, res: Response , next : NextFunction) =>
     }
 
     try {
-        const decoded = jwt.verify(token , process.env.JWT_SECRET) as {userId: string}
-        if(decoded){
+        const decoded = jwt.verify(token , process.env.JWT_SECRET)
+        if (typeof decoded === "object" && decoded !== null && typeof decoded.userId === "string") {
             req.userId = decoded.userId
             next()
         } else {

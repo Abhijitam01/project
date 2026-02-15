@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { Canvas } from "./Canvas"
 import { useSocket } from "@/hooks/useSocket"
 import type { RoomData } from "@/types/room"
+import { safeStorageSet } from "@/lib/storage"
 
 export const RoomCanvas = ({
     roomId,
@@ -16,7 +17,7 @@ export const RoomCanvas = ({
 }) => {
     useEffect(()=>{
         if (inviteCode){
-            localStorage.setItem(`drawr:invite:${roomId}`, inviteCode)
+            safeStorageSet(`drawr:invite:${roomId}`, inviteCode)
         }
     }, [inviteCode, roomId])
 

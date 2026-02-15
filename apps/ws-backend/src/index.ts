@@ -2,8 +2,13 @@ import {WebSocket, WebSocketServer} from "ws"
 import type { RawData } from "ws"
 import { checkUser } from "./checkUser";
 import {prismaClient} from "@repo/db/client"
+import { createLogger } from "@repo/common/logger"
+import "dotenv/config"
+import { randomUUID } from "crypto"
 
-const wss = new WebSocketServer({port: 8080})
+const logger = createLogger({ service: "ws-backend" })
+const port = Number(process.env.WS_PORT ?? 8080)
+const wss = new WebSocketServer({port})
 
 interface User {
     ws:  WebSocket,
@@ -14,6 +19,28 @@ interface User {
 
 const users : User[] = []
 const MAX_MESSAGE_BYTES = 100_000
+
+const isLegacyRoomSchemaError = (error: unknown): boolean => {
+    if (!error || typeof error !== "object") {
+        return false
+    }
+    const maybe = error as {
+        code?: string
+        message?: string
+        meta?: { column?: string }
+    }
+    if (maybe.code !== "P2022") {
+        return false
+    }
+    const column = typeof maybe.meta?.column === "string" ? maybe.meta.column : ""
+    const message = typeof maybe.message === "string" ? maybe.message : ""
+    return (
+        column.includes("Room.isPrivate") ||
+        column.includes("Room.inviteCode") ||
+        message.includes("Room.isPrivate") ||
+        message.includes("Room.inviteCode")
+    )
+}
 
 const getUser = (ws: WebSocket) => users.find(x => x.ws === ws)
 const broadcastPresence = (roomId: string) => {
@@ -60,6 +87,8 @@ const safeJsonParse = (data: RawData | string) => {
     }
 }
 
+logger.info("WebSocket server listening", { port, env: process.env.NODE_ENV ?? "development" })
+
 wss.on("connection", async function connection(ws, request){
     const url = request.url
 
@@ -68,10 +97,12 @@ wss.on("connection", async function connection(ws, request){
     }
 
     const queryParams = new URLSearchParams(url.split("?")[1])
+    const connectionId = queryParams.get("requestId") || randomUUID()
     const token = queryParams.get("token") || ""
     const userId = checkUser(token)
 
     if (userId === null){
+        logger.warn("Rejected websocket connection due to invalid token", { connectionId })
         ws.close()
         return null;
     }
@@ -87,7 +118,7 @@ wss.on("connection", async function connection(ws, request){
             username = dbUser.username
         }
     } catch (e) {
-        // ignore lookup failures
+        logger.warn("User lookup failed during websocket connection", { connectionId, userId, error: e })
     }
 
     users.push({
@@ -97,10 +128,14 @@ wss.on("connection", async function connection(ws, request){
         rooms: []
     })
 
+    logger.info("WebSocket connection established", { connectionId, userId, username })
 
 
 
-    ws.on('error', console.error)
+
+    ws.on("error", (error) => {
+        logger.error("WebSocket connection error", { connectionId, userId, error })
+    })
 
     ws.on("close", () => {
         const user = getUser(ws)
@@ -109,6 +144,7 @@ wss.on("connection", async function connection(ws, request){
         if (index !== -1) {
             users.splice(index, 1)
         }
+        logger.info("WebSocket connection closed", { connectionId, userId, roomCount: rooms.length })
         rooms.forEach(broadcastPresence)
     })
 
@@ -132,9 +168,21 @@ wss.on("connection", async function connection(ws, request){
             if (!user || !roomId || !Number.isFinite(roomIdNum)) {
                 return;
             }
-            const room = await prismaClient.room.findUnique({
-                where: { id: roomIdNum }
-            })
+            let room: { id: number; roomName: string; userId: string; isPrivate?: boolean; inviteCode?: string | null } | null = null
+            try {
+                room = await prismaClient.room.findUnique({
+                    where: { id: roomIdNum }
+                })
+            } catch (roomError: unknown) {
+                if (!isLegacyRoomSchemaError(roomError)) {
+                    throw roomError
+                }
+                const legacyRooms = await prismaClient.$queryRaw<Array<{ id: number; roomName: string; userId: string }>>`
+                    SELECT "id", "roomName", "userId" FROM "Room" WHERE "id" = ${roomIdNum} LIMIT 1
+                `
+                const legacyRoom = legacyRooms[0]
+                room = legacyRoom ? { ...legacyRoom, isPrivate: false, inviteCode: null } : null
+            }
             if (!room) {
                 return;
             }
@@ -148,6 +196,7 @@ wss.on("connection", async function connection(ws, request){
             if (!user.rooms.includes(roomId)) {
                 user.rooms.push(roomId)
             }
+            logger.info("WebSocket joined room", { connectionId, userId, roomId })
             broadcastPresence(roomId)
             return;
         }
@@ -159,6 +208,7 @@ wss.on("connection", async function connection(ws, request){
                 return;
             }
             user.rooms = user.rooms.filter(x => x !== roomId)
+            logger.info("WebSocket left room", { connectionId, userId, roomId })
             broadcastPresence(roomId)
             return;
         }
@@ -313,4 +363,13 @@ wss.on("connection", async function connection(ws, request){
         }
 
     })
+})
+
+process.on("unhandledRejection", (reason) => {
+    logger.error("Unhandled promise rejection", reason)
+})
+
+process.on("uncaughtException", (error) => {
+    logger.error("Uncaught exception", error)
+    process.exit(1)
 })

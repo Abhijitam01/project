@@ -1,6 +1,8 @@
 import { getRoom } from "@/actions/getRoom"
 import { Tool } from "@/canvas/Canvas";
 import type { RoomData, RoomShapeRecord } from "@/types/room"
+import { safeStorageGet, safeStorageSet } from "@/lib/storage"
+import rough from "roughjs/bin/rough"
 
 type StrokeStyle = "solid" | "dashed" | "dotted";
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
@@ -85,6 +87,15 @@ type Shape = {
     fontSize: number;
     strokeFill: string;
     opacity: number;
+} | {
+    type: "mermaid";
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    source: string;
+    svg: string;
+    opacity: number;
 }
 
 export type PresenceUser = {
@@ -92,10 +103,27 @@ export type PresenceUser = {
     username: string
 }
 
+export type TextInputRequest = {
+    x: number
+    y: number
+    screenX: number
+    screenY: number
+    fontSize: number
+    strokeFill: string
+    opacity: number
+}
+
+export type SelectedShapeInfo = {
+    index: number
+    type: Shape["type"]
+    mermaidSource?: string
+}
+
 export class Game {
 
     private canvas: HTMLCanvasElement
     private ctx: CanvasRenderingContext2D
+    private roughCanvas: ReturnType<typeof rough.canvas>
     private roomId: string
     private socket: WebSocket
     private existingShape: Shape[]
@@ -138,7 +166,12 @@ export class Game {
     private  isPinching: boolean = false
     private  pinchDistance: number = 0
     private  touchPointerId: number | null = null
-    private  gridSpacing: number = 36
+    private  onEmptySelectClickCallback?: () => void
+    private  onRequestTextInputCallback?: (request: TextInputRequest) => void
+    private  onSelectionChangeCallback?: (selection: SelectedShapeInfo | null) => void
+    private  mermaidImageCache: Map<string, HTMLImageElement> = new Map()
+    private  isBoxSelecting: boolean = false
+    private  selectionBox: { startX: number; startY: number; endX: number; endY: number } | null = null
     
     constructor(
         canvas: HTMLCanvasElement , 
@@ -146,10 +179,14 @@ export class Game {
         socket: WebSocket, 
         room: RoomData,  
         onScaleChangeCallback: (scale: number) => void,
-        onPresenceUpdateCallback?: (users: PresenceUser[]) => void
+        onPresenceUpdateCallback?: (users: PresenceUser[]) => void,
+        onEmptySelectClickCallback?: () => void,
+        onRequestTextInputCallback?: (request: TextInputRequest) => void,
+        onSelectionChangeCallback?: (selection: SelectedShapeInfo | null) => void
 ){
         this.canvas = canvas
         this.ctx = canvas.getContext("2d")!
+        this.roughCanvas = rough.canvas(canvas)
         this.roomId = roomId
         this.socket = socket
         this.clicked = false
@@ -158,6 +195,9 @@ export class Game {
         this.canvas.height = document.body.clientHeight
         this.onScaleChangeCallback = onScaleChangeCallback;
         this.onPresenceUpdateCallback = onPresenceUpdateCallback;
+        this.onEmptySelectClickCallback = onEmptySelectClickCallback;
+        this.onRequestTextInputCallback = onRequestTextInputCallback;
+        this.onSelectionChangeCallback = onSelectionChangeCallback;
         this.room = room
         this.init()
         this.initHandler()
@@ -256,6 +296,62 @@ export class Game {
         this.updateCursor()
     }
 
+    private notifySelectionChange() {
+        if (!this.onSelectionChangeCallback) return
+        if (this.selectedShapeIndex === null) {
+            this.onSelectionChangeCallback(null)
+            return
+        }
+        const shape = this.existingShape[this.selectedShapeIndex]
+        if (!shape) {
+            this.onSelectionChangeCallback(null)
+            return
+        }
+        this.onSelectionChangeCallback({
+            index: this.selectedShapeIndex,
+            type: shape.type,
+            mermaidSource: shape.type === "mermaid" ? shape.source : undefined,
+        })
+    }
+
+    private setSelectedShapeIndex(index: number | null) {
+        this.selectedShapeIndex = index
+        if (index === null) {
+            this.hoveredShapeIndex = null
+        } else {
+            this.hoveredShapeIndex = index
+        }
+        this.hoveredResizeHandle = null
+        this.activeResizeHandle = null
+        this.notifySelectionChange()
+    }
+
+    selectLastShape() {
+        if (this.existingShape.length === 0) {
+            return
+        }
+        this.setSelectedShapeIndex(this.existingShape.length - 1)
+        this.clearCanvas()
+    }
+
+    updateSelectedMermaid(source: string, svg: string, width: number, height: number) {
+        if (this.selectedShapeIndex === null) return
+        const shape = this.existingShape[this.selectedShapeIndex]
+        if (!shape || shape.type !== "mermaid") return
+        shape.source = source
+        shape.svg = svg
+        shape.width = Math.max(20, width)
+        shape.height = Math.max(20, height)
+        this.saveToHistory()
+        this.clearCanvas()
+        this.socket.send(JSON.stringify({
+            type: "update",
+            data: JSON.stringify({ shape, index: this.selectedShapeIndex }),
+            roomId: this.roomId,
+        }))
+        this.notifySelectionChange()
+    }
+
     setStrokeWidth(width: number){
         this.strokeWidth = width
         this.clearCanvas()
@@ -283,6 +379,59 @@ export class Game {
 
     setFontSize(size: number){
         this.fontSize = size
+    }
+
+    getViewportCenter() {
+        return {
+            x: (this.canvas.width / 2 - this.panX) / this.scale,
+            y: (this.canvas.height / 2 - this.panY) / this.scale,
+        }
+    }
+
+    addTextShape(x: number, y: number, text: string, fontSize: number, strokeFill: string, opacity: number = 1) {
+        const trimmed = text.trim()
+        if (!trimmed) {
+            return
+        }
+        const shape: Shape = {
+            type: "text",
+            x,
+            y,
+            text: trimmed,
+            fontSize,
+            strokeFill,
+            opacity,
+        }
+        this.existingShape.push(shape)
+        this.saveToHistory()
+        this.clearCanvas()
+        this.socket.send(JSON.stringify({
+            type: "draw",
+            data: JSON.stringify({ shape }),
+            roomId: this.roomId,
+        }))
+    }
+
+    addMermaidShape(x: number, y: number, width: number, height: number, svg: string, opacity: number = 1) {
+        const normalizedWidth = Math.max(width, 20)
+        const normalizedHeight = Math.max(height, 20)
+        const shape: Shape = {
+            type: "mermaid",
+            x,
+            y,
+            width: normalizedWidth,
+            height: normalizedHeight,
+            svg,
+            opacity,
+        }
+        this.existingShape.push(shape)
+        this.saveToHistory()
+        this.clearCanvas()
+        this.socket.send(JSON.stringify({
+            type: "draw",
+            data: JSON.stringify({ shape }),
+            roomId: this.roomId,
+        }))
     }
 
     saveToHistory(){
@@ -314,6 +463,14 @@ export class Game {
         }
     }
 
+    private getStableShapeSeed(shape: Shape, index: number) {
+        const explicitSeed = (shape as { seed?: number }).seed
+        if (Number.isFinite(explicitSeed)) {
+            return explicitSeed as number
+        }
+        return index + 1
+    }
+
     clearCanvas() {
         this.ctx.setTransform(this.scale, 0, 0, this.scale, this.panX, this.panY);
         this.ctx.clearRect(
@@ -330,32 +487,33 @@ export class Game {
             this.canvas.width/ this.scale, 
             this.canvas.height / this.scale);
 
-        this.drawGrid()
-
-        this.existingShape.map((shape: Shape)=>{
+        this.existingShape.map((shape: Shape, index: number)=>{
+            const seed = this.getStableShapeSeed(shape, index)
             if(shape.type == "rect"){
-                this.drawRect(shape.x, shape.y, shape.width, shape.height, shape.strokeWidth, shape.strokeFill, shape.bgFill, shape.opacity, shape.strokeStyle);
+                this.drawRect(shape.x, shape.y, shape.width, shape.height, shape.strokeWidth, shape.strokeFill, shape.bgFill, shape.opacity, shape.strokeStyle, seed);
             }
             else if (shape.type === "ellipse"){
-                this.drawEllipse(shape.centerX , shape.centerY, shape.radX, shape.radY, shape.strokeWidth, shape.strokeFill, shape.bgFill, shape.opacity, shape.strokeStyle)
+                this.drawEllipse(shape.centerX , shape.centerY, shape.radX, shape.radY, shape.strokeWidth, shape.strokeFill, shape.bgFill, shape.opacity, shape.strokeStyle, seed)
             }
             else if (shape.type === "line"){
-                this.drawLine(shape.fromX, shape.fromY, shape.toX, shape.toY, shape.strokeWidth, shape.strokeFill, shape.opacity, shape.strokeStyle)
+                this.drawLine(shape.fromX, shape.fromY, shape.toX, shape.toY, shape.strokeWidth, shape.strokeFill, shape.opacity, shape.strokeStyle, seed)
             }
             else if (shape.type === "arrow"){
-                this.drawArrow(shape.fromX, shape.fromY, shape.toX, shape.toY, shape.strokeWidth, shape.strokeFill, shape.opacity, shape.strokeStyle)
+                this.drawArrow(shape.fromX, shape.fromY, shape.toX, shape.toY, shape.strokeWidth, shape.strokeFill, shape.opacity, shape.strokeStyle, seed)
             }
             else if (shape.type === "diamond"){
-                this.drawDiamond(shape.x, shape.y, shape.width, shape.height, shape.strokeWidth, shape.strokeFill, shape.bgFill, shape.opacity, shape.strokeStyle)
+                this.drawDiamond(shape.x, shape.y, shape.width, shape.height, shape.strokeWidth, shape.strokeFill, shape.bgFill, shape.opacity, shape.strokeStyle, seed)
             }
             else if (shape.type === "triangle"){
-                this.drawTriangle(shape.x, shape.y, shape.width, shape.height, shape.strokeWidth, shape.strokeFill, shape.bgFill, shape.opacity, shape.strokeStyle)
+                this.drawTriangle(shape.x, shape.y, shape.width, shape.height, shape.strokeWidth, shape.strokeFill, shape.bgFill, shape.opacity, shape.strokeStyle, seed)
             }
             else if (shape.type === "pencil"){
-                this.drawPencil(shape.points, shape.strokeWidth, shape.strokeFill, shape.opacity, shape.strokeStyle)
+                this.drawPencil(shape.points, shape.strokeWidth, shape.strokeFill, shape.opacity, shape.strokeStyle, seed)
             }
             else if (shape.type === "text"){
                 this.drawText(shape.x, shape.y, shape.text, shape.fontSize, shape.strokeFill, shape.opacity)
+            } else if (shape.type === "mermaid") {
+                this.drawMermaid(shape.x, shape.y, shape.width, shape.height, shape.svg, shape.opacity)
             }
         })
 
@@ -390,7 +548,7 @@ export class Game {
         }
 
         const { x, y } = this.transformPanScale(e.clientX, e.clientY);
-        const snapped = this.activeTool === "pencil" ? { x, y } : { x: this.snapToGrid(x), y: this.snapToGrid(y) }
+        const snapped = { x, y }
 
         this.startX = snapped.x
         this.startY = snapped.y
@@ -457,6 +615,7 @@ export class Game {
             this.activeResizeHandle = null
             this.updateCursor()
             this.clearCanvas()
+            this.onEmptySelectClickCallback?.()
         }
         else if(this.activeTool === "pencil"){
             this.existingShape.push({
@@ -483,6 +642,13 @@ export class Game {
         this.queueCursor(e.clientX, e.clientY)
 
         if (!this.clicked) {
+            if (this.activeTool === "erase") {
+                const { x, y } = this.transformPanScale(e.clientX, e.clientY)
+                this.erase(x, y)
+                this.updateCursor()
+                return
+            }
+
             if (this.activeTool === "select") {
                 const { x, y } = this.transformPanScale(e.clientX, e.clientY)
                 let nextHandle: ResizeHandle | null = null
@@ -509,8 +675,8 @@ export class Game {
         if(this.clicked){
 
             const {x ,y} = this.transformPanScale(e.clientX , e.clientY)
-            const previewX = this.activeTool === "pencil" ? x : this.snapToGrid(x)
-            const previewY = this.activeTool === "pencil" ? y : this.snapToGrid(y)
+            const previewX = x
+            const previewY = y
 
             if (
                 this.isResizing &&
@@ -550,6 +716,9 @@ export class Game {
                     shape.toX += deltaX
                     shape.toY += deltaY
                 } else if (shape.type === "text") {
+                    shape.x = newX
+                    shape.y = newY
+                } else if (shape.type === "mermaid") {
                     shape.x = newX
                     shape.y = newY
                 } else if (shape.type === "pencil") {
@@ -651,9 +820,6 @@ export class Game {
                 this.clearCanvas();
             }
 
-            if (!["grab", "erase", "pencil", "select"].includes(activeTool)) {
-                this.drawAlignmentGuides(previewX, previewY)
-            }
         }
     }
 
@@ -728,6 +894,13 @@ export class Game {
                 y >= shape.y - tolerance &&
                 y <= shape.y + shape.fontSize + tolerance
             )
+        } else if (shape.type === "mermaid") {
+            return (
+                x >= shape.x - tolerance &&
+                x <= shape.x + shape.width + tolerance &&
+                y >= shape.y - tolerance &&
+                y <= shape.y + shape.height + tolerance
+            )
         }
     
         return false;
@@ -755,32 +928,33 @@ export class Game {
         }
     }
 
-    private drawGrid() {
-        const viewWidth = this.canvas.width / this.scale
-        const viewHeight = this.canvas.height / this.scale
-        const startX = -this.panX / this.scale
-        const startY = -this.panY / this.scale
-        const endX = startX + viewWidth
-        const endY = startY + viewHeight
-        this.ctx.save()
-        this.ctx.strokeStyle = "rgba(255,255,255,0.03)"
-        this.ctx.lineWidth = 1 / this.scale
-        this.ctx.setLineDash([4 / this.scale, 4 / this.scale])
-        const startGridX = Math.floor(startX / this.gridSpacing) * this.gridSpacing
-        const startGridY = Math.floor(startY / this.gridSpacing) * this.gridSpacing
-        for (let x = startGridX; x <= endX; x += this.gridSpacing) {
-            this.ctx.beginPath()
-            this.ctx.moveTo(x, startY)
-            this.ctx.lineTo(x, endY)
-            this.ctx.stroke()
-        }
-        for (let y = startGridY; y <= endY; y += this.gridSpacing) {
-            this.ctx.beginPath()
-            this.ctx.moveTo(startX, y)
-            this.ctx.lineTo(endX, y)
-            this.ctx.stroke()
-        }
-        this.ctx.restore()
+    private strokeDash(strokeStyle: StrokeStyle): number[] | undefined {
+        if (strokeStyle === "dashed") return [10, 6]
+        if (strokeStyle === "dotted") return [2, 5]
+        return undefined
+    }
+
+    private roughOptions(
+        strokeWidth: number,
+        strokeFill: string,
+        bgFill: string | null,
+        strokeStyle: StrokeStyle,
+        seed?: number
+    ) {
+        const transparentFill = bgFill === null || bgFill === "rgba(0, 0, 0, 0)"
+        return {
+            stroke: strokeFill,
+            strokeWidth,
+            fill: transparentFill ? undefined : bgFill,
+            fillStyle: "hachure",
+            fillWeight: Math.max(0.5, strokeWidth * 0.7),
+            hachureGap: 8,
+            roughness: 1,
+            bowing: 1,
+            disableMultiStroke: false,
+            strokeLineDash: this.strokeDash(strokeStyle),
+            seed,
+        } as const
     }
 
     private drawRemoteCursors() {
@@ -819,26 +993,6 @@ export class Game {
             username: payload.username || "User",
             updatedAt: Date.now()
         }
-    }
-
-    private drawAlignmentGuides(x: number, y: number) {
-        this.ctx.save()
-        this.ctx.strokeStyle = "rgba(255,255,255,0.12)"
-        this.ctx.lineWidth = 1 / this.scale
-        this.ctx.setLineDash([6 / this.scale, 6 / this.scale])
-        const viewWidth = this.canvas.width / this.scale
-        const viewHeight = this.canvas.height / this.scale
-        this.ctx.beginPath()
-        this.ctx.moveTo(x, y - viewHeight)
-        this.ctx.lineTo(x, y + viewHeight)
-        this.ctx.moveTo(x - viewWidth, y)
-        this.ctx.lineTo(x + viewWidth, y)
-        this.ctx.stroke()
-        this.ctx.restore()
-    }
-
-    private snapToGrid(value: number) {
-        return Math.round(value / this.gridSpacing) * this.gridSpacing
     }
 
     private queueCursor(clientX: number, clientY: number) {
@@ -972,6 +1126,14 @@ export class Game {
                 minY: shape.y,
                 maxX: shape.x + width,
                 maxY: shape.y + shape.fontSize,
+            }
+        }
+        if (shape.type === "mermaid") {
+            return {
+                minX: shape.x,
+                minY: shape.y,
+                maxX: shape.x + shape.width,
+                maxY: shape.y + shape.height,
             }
         }
         return null
@@ -1118,11 +1280,20 @@ export class Game {
             }
         }
 
+        if (shape.type === "mermaid") {
+            return {
+                ...shape,
+                x: nextBounds.minX,
+                y: nextBounds.minY,
+                width: nextBounds.maxX - nextBounds.minX,
+                height: nextBounds.maxY - nextBounds.minY,
+            }
+        }
+
         return shape
     }
 
-    drawRect(x:number , y:number , width: number, height: number, strokeWidth: number, strokeFill: string, bgFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid"){
-        // If we draw right to left, width is -ve and so postion of mouse + (-ve width) gives top left corner
+    drawRect(x:number , y:number , width: number, height: number, strokeWidth: number, strokeFill: string, bgFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid", seed?: number){
         const posX = width < 0 ? x + width : x;
         const posY = height < 0 ? y + height : y;
         const normalizedWidth = Math.abs(width);
@@ -1131,130 +1302,108 @@ export class Game {
         strokeWidth = strokeWidth || 1;
         strokeFill = strokeFill || "rgba(255, 255, 255)";
         bgFill = bgFill || "rgba(18, 18, 18)";
-    
-        const radius = Math.min(Math.abs(Math.max(normalizedWidth, normalizedHeight) / 20), normalizedWidth / 2, normalizedHeight / 2);
-    
-        const previousAlpha = this.ctx.globalAlpha;
-        this.ctx.globalAlpha = opacity;
-        this.applyStrokeStyle(strokeStyle);
 
-        // RoundRect : https://stackoverflow.com/a/3368118
-        this.ctx.beginPath();
-        this.ctx.moveTo(posX + radius, posY);
-        this.ctx.strokeStyle = strokeFill;
-        this.ctx.lineWidth = strokeWidth;
-        this.ctx.fillStyle = bgFill;
-        this.ctx.lineTo(posX + normalizedWidth - radius, posY);
-        this.ctx.quadraticCurveTo(posX + normalizedWidth, posY, posX + normalizedWidth, posY + radius);
-        this.ctx.lineTo(posX + normalizedWidth, posY + normalizedHeight - radius);
-        this.ctx.quadraticCurveTo(posX + normalizedWidth, posY + normalizedHeight, posX + normalizedWidth - radius, posY + normalizedHeight);
-        this.ctx.lineTo(posX + radius, posY + normalizedHeight);
-        this.ctx.quadraticCurveTo(posX, posY + normalizedHeight, posX, posY + normalizedHeight - radius);
-        this.ctx.lineTo(posX, posY + radius);
-        this.ctx.quadraticCurveTo(posX, posY, posX + radius, posY);
-        this.ctx.closePath();
-        this.ctx.fill();
-        this.ctx.stroke();
-        
-        this.ctx.globalAlpha = previousAlpha;
-        this.ctx.setLineDash([]);
+        const previousAlpha = this.ctx.globalAlpha
+        this.ctx.globalAlpha = opacity
+        this.roughCanvas.rectangle(
+            posX,
+            posY,
+            normalizedWidth,
+            normalizedHeight,
+            this.roughOptions(strokeWidth, strokeFill, bgFill, strokeStyle, seed) as never
+        )
+        this.ctx.globalAlpha = previousAlpha
+        this.ctx.setLineDash([])
     }
 
-    drawEllipse(x: number, y:number, width: number , height: number, strokeWidth: number, strokeFill: string, bgFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid"){
+    drawEllipse(x: number, y:number, width: number , height: number, strokeWidth: number, strokeFill: string, bgFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid", seed?: number){
         strokeWidth = strokeWidth || 1;
         strokeFill = strokeFill || "rgba(255, 255, 255)";    
         bgFill = bgFill || "rgba(18, 18, 18)";
 
-        const previousAlpha = this.ctx.globalAlpha;
-        this.ctx.globalAlpha = opacity;
-        this.applyStrokeStyle(strokeStyle);
-
-        this.ctx.beginPath()
-        this.ctx.strokeStyle = strokeFill;
-        this.ctx.lineWidth = strokeWidth;   
-        this.ctx.fillStyle = bgFill;
-        this.ctx.ellipse(x, y, width, height, 0 , 0  , 2* Math.PI)
-        this.ctx.fill();
-        this.ctx.stroke();
-
-        this.ctx.globalAlpha = previousAlpha;
-        this.ctx.setLineDash([]);
+        const previousAlpha = this.ctx.globalAlpha
+        this.ctx.globalAlpha = opacity
+        this.roughCanvas.ellipse(
+            x,
+            y,
+            Math.max(width * 2, 0.0001),
+            Math.max(height * 2, 0.0001),
+            {
+                ...this.roughOptions(strokeWidth, strokeFill, bgFill, strokeStyle, seed),
+                roughness: 0.25,
+                bowing: 0,
+                disableMultiStroke: true,
+                fillStyle: "solid",
+            } as never
+        )
+        this.ctx.globalAlpha = previousAlpha
+        this.ctx.setLineDash([])
     }
 
-    drawLine(fromX:number, fromY:number , toX:number, toY:number ,  strokeWidth: number, strokeFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid"){
+    drawLine(fromX:number, fromY:number , toX:number, toY:number ,  strokeWidth: number, strokeFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid", seed?: number){
         strokeWidth = strokeWidth || 1;
         strokeFill = strokeFill || "rgba(255, 255, 255)";
 
-        const previousAlpha = this.ctx.globalAlpha;
-        this.ctx.globalAlpha = opacity;
-        this.applyStrokeStyle(strokeStyle);
-
-        this.ctx.beginPath()
-        this.ctx.strokeStyle = strokeFill;
-        this.ctx.lineWidth = strokeWidth;    
-
-        this.ctx.moveTo(fromX, fromY)
-        this.ctx.lineTo(toX, toY)
-        this.ctx.stroke()
-
-        this.ctx.globalAlpha = previousAlpha;
-        this.ctx.setLineDash([]);
+        const previousAlpha = this.ctx.globalAlpha
+        this.ctx.globalAlpha = opacity
+        this.roughCanvas.line(
+            fromX,
+            fromY,
+            toX,
+            toY,
+            this.roughOptions(strokeWidth, strokeFill, null, strokeStyle, seed) as never
+        )
+        this.ctx.globalAlpha = previousAlpha
+        this.ctx.setLineDash([])
     }
 
-    drawPencil(points: {x:number, y:number}[], strokeWidth: number, strokeFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid"){
-        const previousAlpha = this.ctx.globalAlpha;
-        this.ctx.globalAlpha = opacity;
-        this.applyStrokeStyle(strokeStyle);
-
-        this.ctx.beginPath()
-        this.ctx.strokeStyle = strokeFill;
-        this.ctx.lineWidth = strokeWidth;
+    drawPencil(points: {x:number, y:number}[], strokeWidth: number, strokeFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid", seed?: number){
         if(points[0] === undefined) return null;
-        this.ctx.moveTo(points[0].x , points[0].y)
-        points.forEach(point => this.ctx.lineTo(point.x, point.y))
-        this.ctx.stroke()
-
-        this.ctx.globalAlpha = previousAlpha;
-        this.ctx.setLineDash([]);
+        const previousAlpha = this.ctx.globalAlpha
+        this.ctx.globalAlpha = opacity
+        this.roughCanvas.linearPath(
+            points.map((point) => [point.x, point.y]),
+            this.roughOptions(strokeWidth, strokeFill, null, strokeStyle, seed) as never
+        )
+        this.ctx.globalAlpha = previousAlpha
+        this.ctx.setLineDash([])
     }
 
-    drawArrow(fromX: number, fromY: number, toX: number, toY: number, strokeWidth: number, strokeFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid") {
-        const previousAlpha = this.ctx.globalAlpha;
-        this.ctx.globalAlpha = opacity;
-        this.applyStrokeStyle(strokeStyle);
+    drawArrow(fromX: number, fromY: number, toX: number, toY: number, strokeWidth: number, strokeFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid", seed?: number) {
+        const previousAlpha = this.ctx.globalAlpha
+        this.ctx.globalAlpha = opacity
+        this.roughCanvas.line(
+            fromX,
+            fromY,
+            toX,
+            toY,
+            this.roughOptions(strokeWidth, strokeFill, null, strokeStyle, seed) as never
+        )
 
-        // Draw the line
-        this.ctx.beginPath();
-        this.ctx.strokeStyle = strokeFill;
-        this.ctx.lineWidth = strokeWidth;
-        this.ctx.moveTo(fromX, fromY);
-        this.ctx.lineTo(toX, toY);
-        this.ctx.stroke();
-
-        // Draw arrowhead
         const angle = Math.atan2(toY - fromY, toX - fromX);
         const arrowLength = 15;
         const arrowAngle = Math.PI / 6;
 
-        this.ctx.setLineDash([]); // Arrowhead is always solid
-        this.ctx.beginPath();
-        this.ctx.moveTo(toX, toY);
-        this.ctx.lineTo(
+        this.roughCanvas.line(
+            toX,
+            toY,
             toX - arrowLength * Math.cos(angle - arrowAngle),
-            toY - arrowLength * Math.sin(angle - arrowAngle)
-        );
-        this.ctx.moveTo(toX, toY);
-        this.ctx.lineTo(
+            toY - arrowLength * Math.sin(angle - arrowAngle),
+            this.roughOptions(strokeWidth, strokeFill, null, "solid", seed === undefined ? undefined : seed + 1) as never
+        )
+        this.roughCanvas.line(
+            toX,
+            toY,
             toX - arrowLength * Math.cos(angle + arrowAngle),
-            toY - arrowLength * Math.sin(angle + arrowAngle)
-        );
-        this.ctx.stroke();
+            toY - arrowLength * Math.sin(angle + arrowAngle),
+            this.roughOptions(strokeWidth, strokeFill, null, "solid", seed === undefined ? undefined : seed + 2) as never
+        )
 
-        this.ctx.globalAlpha = previousAlpha;
-        this.ctx.setLineDash([]);
+        this.ctx.globalAlpha = previousAlpha
+        this.ctx.setLineDash([])
     }
 
-    drawDiamond(x: number, y: number, width: number, height: number, strokeWidth: number, strokeFill: string, bgFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid") {
+    drawDiamond(x: number, y: number, width: number, height: number, strokeWidth: number, strokeFill: string, bgFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid", seed?: number) {
         const posX = width < 0 ? x + width : x;
         const posY = height < 0 ? y + height : y;
         const normalizedWidth = Math.abs(width);
@@ -1264,32 +1413,26 @@ export class Game {
         strokeFill = strokeFill || "rgba(255, 255, 255)";
         bgFill = bgFill || "rgba(18, 18, 18)";
 
-        const previousAlpha = this.ctx.globalAlpha;
-        this.ctx.globalAlpha = opacity;
-        this.applyStrokeStyle(strokeStyle);
-
-        // Diamond shape
+        const previousAlpha = this.ctx.globalAlpha
+        this.ctx.globalAlpha = opacity
         const centerX = posX + normalizedWidth / 2;
         const centerY = posY + normalizedHeight / 2;
 
-        this.ctx.beginPath();
-        this.ctx.moveTo(centerX, posY); // Top
-        this.ctx.lineTo(posX + normalizedWidth, centerY); // Right
-        this.ctx.lineTo(centerX, posY + normalizedHeight); // Bottom
-        this.ctx.lineTo(posX, centerY); // Left
-        this.ctx.closePath();
+        this.roughCanvas.polygon(
+            [
+                [centerX, posY],
+                [posX + normalizedWidth, centerY],
+                [centerX, posY + normalizedHeight],
+                [posX, centerY],
+            ],
+            this.roughOptions(strokeWidth, strokeFill, bgFill, strokeStyle, seed) as never
+        )
 
-        this.ctx.strokeStyle = strokeFill;
-        this.ctx.lineWidth = strokeWidth;
-        this.ctx.fillStyle = bgFill;
-        this.ctx.fill();
-        this.ctx.stroke();
-
-        this.ctx.globalAlpha = previousAlpha;
-        this.ctx.setLineDash([]);
+        this.ctx.globalAlpha = previousAlpha
+        this.ctx.setLineDash([])
     }
 
-    drawTriangle(x: number, y: number, width: number, height: number, strokeWidth: number, strokeFill: string, bgFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid") {
+    drawTriangle(x: number, y: number, width: number, height: number, strokeWidth: number, strokeFill: string, bgFill: string, opacity: number = 1, strokeStyle: StrokeStyle = "solid", seed?: number) {
         const posX = width < 0 ? x + width : x;
         const posY = height < 0 ? y + height : y;
         const normalizedWidth = Math.abs(width);
@@ -1299,27 +1442,21 @@ export class Game {
         strokeFill = strokeFill || "rgba(255, 255, 255)";
         bgFill = bgFill || "rgba(18, 18, 18)";
 
-        const previousAlpha = this.ctx.globalAlpha;
-        this.ctx.globalAlpha = opacity;
-        this.applyStrokeStyle(strokeStyle);
-
-        // Triangle shape
+        const previousAlpha = this.ctx.globalAlpha
+        this.ctx.globalAlpha = opacity
         const centerX = posX + normalizedWidth / 2;
 
-        this.ctx.beginPath();
-        this.ctx.moveTo(centerX, posY); // Top center
-        this.ctx.lineTo(posX + normalizedWidth, posY + normalizedHeight); // Bottom right
-        this.ctx.lineTo(posX, posY + normalizedHeight); // Bottom left
-        this.ctx.closePath();
+        this.roughCanvas.polygon(
+            [
+                [centerX, posY],
+                [posX + normalizedWidth, posY + normalizedHeight],
+                [posX, posY + normalizedHeight],
+            ],
+            this.roughOptions(strokeWidth, strokeFill, bgFill, strokeStyle, seed) as never
+        )
 
-        this.ctx.strokeStyle = strokeFill;
-        this.ctx.lineWidth = strokeWidth;
-        this.ctx.fillStyle = bgFill;
-        this.ctx.fill();
-        this.ctx.stroke();
-
-        this.ctx.globalAlpha = previousAlpha;
-        this.ctx.setLineDash([]);
+        this.ctx.globalAlpha = previousAlpha
+        this.ctx.setLineDash([])
     }
 
     drawText(x: number, y: number, text: string, fontSize: number, strokeFill: string, opacity: number = 1) {
@@ -1334,11 +1471,42 @@ export class Game {
         this.ctx.globalAlpha = previousAlpha;
     }
 
-    erase(x: number , y:number){
-        const transformedPoint = this.transformPanScale(x, y);
+    private toSvgDataUri(svg: string) {
+        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+    }
 
+    drawMermaid(x: number, y: number, width: number, height: number, svg: string, opacity: number = 1) {
+        const key = svg
+        let image = this.mermaidImageCache.get(key)
+        if (!image) {
+            image = new Image()
+            image.decoding = "async"
+            image.src = this.toSvgDataUri(svg)
+            image.onload = () => {
+                this.clearCanvas()
+            }
+            this.mermaidImageCache.set(key, image)
+        }
+
+        const previousAlpha = this.ctx.globalAlpha
+        this.ctx.globalAlpha = opacity
+        if (image.complete && image.naturalWidth > 0) {
+            this.ctx.drawImage(image, x, y, width, height)
+        } else {
+            this.ctx.fillStyle = "rgba(255,255,255,0.04)"
+            this.ctx.strokeStyle = "rgba(255,255,255,0.2)"
+            this.ctx.lineWidth = 1 / this.scale
+            this.ctx.setLineDash([4 / this.scale, 3 / this.scale])
+            this.ctx.fillRect(x, y, width, height)
+            this.ctx.strokeRect(x, y, width, height)
+            this.ctx.setLineDash([])
+        }
+        this.ctx.globalAlpha = previousAlpha
+    }
+
+    erase(x: number , y:number){
         const shapeIndex = this.existingShape.findIndex((shape) =>
-            this.isPointInShape(transformedPoint.x, transformedPoint.y, shape)
+            this.isPointInShape(x, y, shape)
         );
     
         if (shapeIndex !== -1) {
@@ -1503,19 +1671,17 @@ export class Game {
             this.startX = e.clientX 
             this.startY = e.clientY 
         } else if (this.activeTool === "text") {
-            // Prompt for text input
-            const text = prompt("Enter text:")
-            if (text && text.trim()) {
-                shape = {
-                    type: "text",
-                    x: this.startX,
-                    y: this.startY,
-                    text: text.trim(),
-                    fontSize: this.fontSize,
-                    strokeFill: this.strokeFill,
-                    opacity: this.opacity,
-                }
-            }
+            this.onRequestTextInputCallback?.({
+                x: this.startX,
+                y: this.startY,
+                screenX: e.clientX,
+                screenY: e.clientY,
+                fontSize: this.fontSize,
+                strokeFill: this.strokeFill,
+                opacity: this.opacity,
+            })
+            this.updateCursor()
+            return
         }
          
 
@@ -1682,6 +1848,20 @@ export class Game {
         
     };
 
+    zoomBy(step: number) {
+        const centerX = this.canvas.width / 2
+        const centerY = this.canvas.height / 2
+        const unclamped = this.scale * (1 + step)
+        const newScale = Math.min(this.maxScale, Math.max(this.minScale, unclamped))
+        const canvasMouseX = (centerX - this.panX) / this.scale
+        const canvasMouseY = (centerY - this.panY) / this.scale
+        this.panX -= canvasMouseX * (newScale - this.scale)
+        this.panY -= canvasMouseY * (newScale - this.scale)
+        this.scale = newScale
+        this.onScaleChange(this.scale)
+        this.clearCanvas()
+    }
+
 
     exportPNG() {
         const fileName = this.bestName("png")
@@ -1702,6 +1882,21 @@ export class Game {
         }
         const blob = new Blob([JSON.stringify(payload)], { type: "application/json" })
         this.downloadBlob(blob, this.bestName("json"))
+    }
+
+    resetCanvas() {
+        this.existingShape = []
+        this.selectedShapeIndex = null
+        this.hoveredShapeIndex = null
+        this.hoveredResizeHandle = null
+        this.activeResizeHandle = null
+        this.clearCanvas()
+        this.saveToHistory()
+        this.persistSnapshot()
+        this.socket.send(JSON.stringify({
+            type: "reset",
+            roomId: this.roomId
+        }))
     }
 
     async importJSON(file: File) {
@@ -1752,7 +1947,7 @@ export class Game {
     }
 
     private shapeToSVG(shape: Shape): string | null {
-        const strokeDash = shape.type === "text" ? "" : this.svgStrokeDash(shape.strokeStyle)
+        const strokeDash = shape.type === "text" || shape.type === "mermaid" ? "" : this.svgStrokeDash(shape.strokeStyle)
         switch (shape.type) {
             case "rect": {
                 const width = shape.width
@@ -1795,6 +1990,10 @@ export class Game {
             }
             case "text": {
                 return `<text x="${shape.x}" y="${shape.y}" font-family="Inter, Arial, sans-serif" font-size="${shape.fontSize}" fill="${shape.strokeFill}" opacity="${shape.opacity}">${this.escapeSvgText(shape.text)}</text>`
+            }
+            case "mermaid": {
+                const href = this.toSvgDataUri(shape.svg)
+                return `<image x="${shape.x}" y="${shape.y}" width="${shape.width}" height="${shape.height}" href="${href}" opacity="${shape.opacity}" />`
             }
             default:
                 return null
@@ -1861,7 +2060,7 @@ export class Game {
 
     private loadSnapshot(): Shape[] | null {
         try {
-            const raw = localStorage.getItem(this.snapshotKey())
+            const raw = safeStorageGet(this.snapshotKey())
             if (!raw) return null
             const data = JSON.parse(raw)
             if (Array.isArray(data?.shapes)) {
@@ -1880,7 +2079,7 @@ export class Game {
                 return
             }
             this.lastSnapshotAt = now
-            localStorage.setItem(this.snapshotKey(), JSON.stringify({
+            safeStorageSet(this.snapshotKey(), JSON.stringify({
                 shapes: this.existingShape,
                 updatedAt: now
             }))
