@@ -15,6 +15,7 @@ interface SidebarProps {
   setStrokeStyle: React.Dispatch<React.SetStateAction<StrokeStyle>>
   fontSize: number
   setFontSize: React.Dispatch<React.SetStateAction<number>>
+  onInsertMermaid: (definition: string) => Promise<void>
 }
 
 export const Sidebar = ({
@@ -31,7 +32,12 @@ export const Sidebar = ({
   setStrokeStyle,
   fontSize,
   setFontSize,
+  onInsertMermaid,
 }: SidebarProps) => {
+  const [mermaidSource, setMermaidSource] = React.useState("graph TD\n  A[Start] --> B{Decision}\n  B -->|Yes| C[Action]\n  B -->|No| D[Stop]")
+  const [isMermaidPending, setIsMermaidPending] = React.useState(false)
+  const [mermaidError, setMermaidError] = React.useState<string | null>(null)
+
   const strokeFills: strokeFill[] = [
     "rgba(211, 211, 211)",
     "rgba(242, 154, 158)",
@@ -56,8 +62,20 @@ export const Sidebar = ({
     return null
   }
 
+  const handleInsertMermaid = async () => {
+    setMermaidError(null)
+    setIsMermaidPending(true)
+    try {
+      await onInsertMermaid(mermaidSource)
+    } catch (error) {
+      setMermaidError(error instanceof Error ? error.message : "Failed to insert Mermaid diagram")
+    } finally {
+      setIsMermaidPending(false)
+    }
+  }
+
   return (
-    <aside className="fixed right-5 top-24 z-40 w-64 rounded-2xl border border-white/15 bg-[#1f2026]/95 p-4 text-white shadow-xl backdrop-blur">
+    <aside className="fixed left-5 top-24 z-40 w-64 rounded-2xl border border-white/15 bg-[#1f2026]/95 p-4 text-white shadow-xl backdrop-blur">
       <div className="mb-4 flex items-center justify-between">
         <p className="text-sm font-semibold tracking-wide text-white/95">Style</p>
         <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] uppercase text-white/60">{activeTool}</span>
@@ -164,6 +182,25 @@ export const Sidebar = ({
             />
           </ControlBlock>
         )}
+
+        <ControlBlock label="Mermaid">
+          <textarea
+            value={mermaidSource}
+            onChange={(event) => setMermaidSource(event.target.value)}
+            rows={6}
+            className="w-full rounded-md border border-white/15 bg-white/[0.04] p-2 text-xs text-white/90 outline-none transition focus:border-blue-300/60"
+            placeholder="graph TD; A-->B"
+          />
+          <button
+            type="button"
+            onClick={() => void handleInsertMermaid()}
+            disabled={isMermaidPending}
+            className="mt-2 w-full rounded-md border border-blue-400/55 bg-blue-500/20 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-blue-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isMermaidPending ? "Rendering..." : "Insert Mermaid"}
+          </button>
+          {mermaidError ? <p className="mt-2 text-xs text-red-300">{mermaidError}</p> : null}
+        </ControlBlock>
       </div>
     </aside>
   )

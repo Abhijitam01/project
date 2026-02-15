@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { safeStorageGet } from "@/lib/storage"
 
 interface Room {
     id: string
@@ -13,7 +14,7 @@ export const useRoomByName = (roomName: string) => {
     const [room, setRoom] = useState<Room>()
 
     useEffect(()=>{
-        const token = localStorage.getItem("token")
+        const token = safeStorageGet("token")
 
         const fetchRoom = async () => {
             try{

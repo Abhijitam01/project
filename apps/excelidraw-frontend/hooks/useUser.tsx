@@ -1,61 +1,108 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+import { safeStorageGet, safeStorageRemove } from "@/lib/storage"
 
-interface User {
-    user : {id: string;
-    username: string;
-    room: {
-      id: string;
-      roomName: string;
-    }[];}
-  }
-  
-  interface UseUserResponse {
-    user: User | undefined; 
-    isLoading: boolean;
-    error: string | null; 
-  }
-  
+export interface RoomSummary {
+  id: string
+  roomName: string
+}
 
-export const useUser = () : UseUserResponse => {
-    const [user, setUser] = useState<User | undefined>(undefined)
-    const [isLoading , setIsLoading] = useState(false)
-    const [error, setError] = useState<string | null>(null)
+export interface AuthenticatedUser {
+  id: string
+  username: string
+  email: string
+  room: RoomSummary[]
+}
 
-    useEffect(()=>{
-        const fetchUser = async () =>{
-            setIsLoading(true)
-           try{
-            const res = await fetch(`${process.env.NEXT_PUBLIC_HTTP_URL}/user`, {
-                method: "GET",
-                headers: {
-                    "authorization": localStorage.getItem("token") || ""
-                }
-            })
+interface UseUserResponse {
+  user: AuthenticatedUser | null
+  isLoading: boolean
+  error: string | null
+  reload: () => Promise<void>
+}
 
-            if(!res.ok){
-                throw new Error("Something Went Wrong")
-            }
+interface UserResponse {
+  user?: AuthenticatedUser
+  error?: string
+  message?: string
+}
 
-            const data = await res.json()
+export const useUser = (): UseUserResponse => {
+  const [user, setUser] = useState<AuthenticatedUser | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-            setUser(data)
-            
-           }
-           catch(err : unknown){
-            setUser(undefined)
-            setError(err instanceof Error ? err.message : "Something went wrong")
-           }
-           finally{
-            setIsLoading(false)
-           }
+  const fetchUser = useCallback(async () => {
+    setIsLoading(true)
+    const token = safeStorageGet("token")
 
-        }
+    if (!token) {
+      setUser(null)
+      setError("AUTH_REQUIRED")
+      setIsLoading(false)
+      return
+    }
 
-        fetchUser()
-    },[])
+    if (!process.env.NEXT_PUBLIC_HTTP_URL) {
+      setUser(null)
+      setError("Client config is missing NEXT_PUBLIC_HTTP_URL")
+      setIsLoading(false)
+      return
+    }
 
-    return {user, isLoading , error}
-    
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_HTTP_URL}/user`, {
+        method: "GET",
+        headers: {
+          authorization: token,
+        },
+      })
+
+      if (res.status === 401) {
+        safeStorageRemove("token")
+        setUser(null)
+        setError("AUTH_REQUIRED")
+        return
+      }
+
+      const data = (await res.json().catch(() => null)) as UserResponse | null
+
+      if (!res.ok) {
+        setUser(null)
+        setError(data?.error || data?.message || "Failed to load user")
+        return
+      }
+
+      if (!data?.user) {
+        setUser(null)
+        setError("Malformed user response from server")
+        return
+      }
+
+      setUser({
+        id: data.user.id,
+        username: data.user.username,
+        email: data.user.email,
+        room: Array.isArray(data.user.room)
+          ? data.user.room.map((r) => ({
+              id: String(r.id),
+              roomName: r.roomName,
+            }))
+          : [],
+      })
+      setError(null)
+    } catch (err: unknown) {
+      setUser(null)
+      setError(err instanceof Error ? err.message : "Something went wrong")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void fetchUser()
+  }, [fetchUser])
+
+  return { user, isLoading, error, reload: fetchUser }
 }

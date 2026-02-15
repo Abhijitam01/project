@@ -5,19 +5,23 @@ import { usePathname, useRouter } from "next/navigation";
 import { 
   LayoutDashboard, 
   PlusSquare, 
-  Settings, 
   LogOut, 
   ChevronRight,
   Monitor
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@repo/ui/button";
+import { safeStorageRemove } from "@/lib/storage";
 
 interface SidebarItemProps {
   href: string;
   icon: React.ElementType;
   label: string;
   active?: boolean;
+}
+
+interface DashboardSidebarProps {
+  username: string;
 }
 
 const SidebarItem = ({ href, icon: Icon, label, active }: SidebarItemProps) => {
@@ -38,12 +42,12 @@ const SidebarItem = ({ href, icon: Icon, label, active }: SidebarItemProps) => {
   );
 };
 
-export function DashboardSidebar() {
+export function DashboardSidebar({ username }: DashboardSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
+    safeStorageRemove("token");
     router.push("/signin");
   };
 
@@ -56,6 +60,7 @@ export function DashboardSidebar() {
           </div>
           <span className="text-xl font-bold tracking-tight">Sketchy</span>
         </Link>
+        <p className="mt-3 text-xs text-muted-foreground">Signed in as <span className="font-semibold text-foreground">{username}</span></p>
       </div>
 
       <div className="flex-1 flex flex-col gap-1">
@@ -74,12 +79,6 @@ export function DashboardSidebar() {
       </div>
 
       <div className="mt-auto border-t border-border pt-4 flex flex-col gap-1">
-        <SidebarItem 
-          href="/settings" 
-          icon={Settings} 
-          label="Settings" 
-          active={pathname === "/settings"} 
-        />
         <Button 
           variant="ghost" 
           className="justify-start gap-3 px-3 py-2 h-auto text-muted-foreground hover:text-destructive hover:bg-destructive/10"
