@@ -214,9 +214,10 @@ wss.on("connection", async function connection(ws, request){
         }
 
         if(parsedData.type === "reset"){
+            const sender = getUser(ws)
             const roomId = String(parsedData.roomId ?? "")
             const roomIdNum = Number(roomId)
-            if (!roomId || !Number.isFinite(roomIdNum)) {
+            if (!sender || !roomId || !Number.isFinite(roomIdNum) || !sender.rooms.includes(roomId)) {
                 return;
             }
 
@@ -238,10 +239,11 @@ wss.on("connection", async function connection(ws, request){
         }
 
         if(parsedData.type === "bulk_draw"){
+            const sender = getUser(ws)
             const roomId = String(parsedData.roomId ?? "")
             const roomIdNum = Number(roomId)
             const shapes = parsedData.shapes
-            if (!roomId || !Number.isFinite(roomIdNum) || !Array.isArray(shapes)) {
+            if (!sender || !roomId || !Number.isFinite(roomIdNum) || !Array.isArray(shapes) || !sender.rooms.includes(roomId)) {
                 return;
             }
 
@@ -273,10 +275,11 @@ wss.on("connection", async function connection(ws, request){
         }
 
         if(parsedData.type === "cursor"){
+            const sender = getUser(ws)
             const roomId = String(parsedData.roomId ?? "")
             const roomIdNum = Number(roomId)
             const cursorPayload = safeJsonParse(parsedData.data)
-            if (!roomId || !Number.isFinite(roomIdNum) || !cursorPayload) {
+            if (!sender || !roomId || !Number.isFinite(roomIdNum) || !cursorPayload || !sender.rooms.includes(roomId)) {
                 return;
             }
             const x = Number(cursorPayload.x)
@@ -284,7 +287,6 @@ wss.on("connection", async function connection(ws, request){
             if (!Number.isFinite(x) || !Number.isFinite(y)) {
                 return;
             }
-            const sender = getUser(ws)
             const payload = {
                 userId,
                 username: sender?.username || "User",
@@ -305,10 +307,18 @@ wss.on("connection", async function connection(ws, request){
         }
 
         if(parsedData.type === "draw"){
+            const sender = getUser(ws)
             const roomId = String(parsedData.roomId ?? "")
             const payload = parsedData.data
             const roomIdNum = Number(roomId)
-            if (!roomId || typeof payload !== "string" || !Number.isFinite(roomIdNum) || payload.length > MAX_MESSAGE_BYTES) {
+            if (
+                !sender ||
+                !roomId ||
+                typeof payload !== "string" ||
+                !Number.isFinite(roomIdNum) ||
+                payload.length > MAX_MESSAGE_BYTES ||
+                !sender.rooms.includes(roomId)
+            ) {
                 return;
             }
 
@@ -336,10 +346,18 @@ wss.on("connection", async function connection(ws, request){
 
 
         if(parsedData.type === "erase"){
+            const sender = getUser(ws)
             const roomId = String(parsedData.roomId ?? "")
             const payload = parsedData.data
             const roomIdNum = Number(roomId)
-            if (!roomId || typeof payload !== "string" || !Number.isFinite(roomIdNum) || payload.length > MAX_MESSAGE_BYTES) {
+            if (
+                !sender ||
+                !roomId ||
+                typeof payload !== "string" ||
+                !Number.isFinite(roomIdNum) ||
+                payload.length > MAX_MESSAGE_BYTES ||
+                !sender.rooms.includes(roomId)
+            ) {
                 return;
             }
 

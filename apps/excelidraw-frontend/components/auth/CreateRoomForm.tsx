@@ -50,7 +50,7 @@ export function CreateRoomForm() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          authorization: token,
+          authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(values),
       })
