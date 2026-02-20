@@ -21,7 +21,7 @@ export const useRoomByName = (roomName: string) => {
                 const response = await fetch(`${process.env.NEXT_PUBLIC_HTTP_URL}/room/${roomName}`, {
                     method: "GET",
                     headers: {
-                        "authorization": token || ""
+                        "authorization": token ? `Bearer ${token}` : ""
                     }
                 })
 

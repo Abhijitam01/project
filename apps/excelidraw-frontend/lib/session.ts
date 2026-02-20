@@ -12,7 +12,7 @@ export const hasValidSession = async (): Promise<boolean> => {
     const response = await fetch(`${process.env.NEXT_PUBLIC_HTTP_URL}/user`, {
       method: "GET",
       headers: {
-        authorization: token,
+        authorization: `Bearer ${token}`,
       },
     })
 

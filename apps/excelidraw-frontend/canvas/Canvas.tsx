@@ -5,10 +5,10 @@ import { Sidebar } from "@/components/Sidebar"
 import { Toolbar } from "@/components/Toolbar"
 import { PresenceBar } from "@/components/PresenceBar"
 import { ShareButton } from "@/components/ShareButton"
-import { Game, PresenceUser, TextInputRequest } from "@/render/Game"
+import { Game, PresenceUser, SelectedShapeInfo, TextInputRequest } from "@/render/Game"
 import type { RoomData } from "@/types/room"
 import { useEffect, useRef, useState, ChangeEvent, type ReactNode } from "react"
-import { Download, FolderOpen, Menu, RotateCcw, X } from "lucide-react"
+import { Download, FolderOpen, Menu, RotateCcw, Save, X } from "lucide-react"
 
 interface CanvasProps {
   roomId: string
@@ -47,8 +47,10 @@ export type bgFill =
   | "rgba(49, 37, 7)"
 
 export type StrokeStyle = "solid" | "dashed" | "dotted"
+type FloatingPanel = "none" | "menu" | "mermaid"
 
 const DRAW_TOOLS: Tool[] = ["rect", "ellipse", "diamond", "triangle", "line", "arrow", "pencil"]
+const TEXT_INPUT_FONT_FAMILY = "\"Caveat\", \"Comic Sans MS\", \"Segoe Print\", cursive"
 
 export const Canvas = ({ roomId, socket, room, inviteCode }: CanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -68,17 +70,37 @@ export const Canvas = ({ roomId, socket, room, inviteCode }: CanvasProps) => {
   const [presenceUsers, setPresenceUsers] = useState<PresenceUser[]>([])
   const [importError, setImportError] = useState<string | null>(null)
   const [textInput, setTextInput] = useState<(TextInputRequest & { value: string }) | null>(null)
-  const [isSelectMenuOpen, setIsSelectMenuOpen] = useState(false)
+  const [selectedShape, setSelectedShape] = useState<SelectedShapeInfo | null>(null)
+  const [openPanel, setOpenPanel] = useState<FloatingPanel>("none")
+  const [mermaidEditor, setMermaidEditor] = useState("")
+  const [isMermaidUpdating, setIsMermaidUpdating] = useState(false)
+  const [mermaidUpdateError, setMermaidUpdateError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const textMeasureCanvasRef = useRef<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
     toolLockedRef.current = toolLocked
   }, [toolLocked])
 
   useEffect(() => {
-    if (activeTool !== "select") {
-      setIsSelectMenuOpen(false)
+    if (selectedShape?.type === "mermaid") {
+      setMermaidEditor(selectedShape.mermaidSource ?? "")
+      setMermaidUpdateError(null)
     }
+  }, [selectedShape])
+
+  useEffect(() => {
+    const isStrokeTool =
+      activeTool === "rect" ||
+      activeTool === "ellipse" ||
+      activeTool === "diamond" ||
+      activeTool === "triangle" ||
+      activeTool === "line" ||
+      activeTool === "arrow" ||
+      activeTool === "pencil" ||
+      activeTool === "text"
+    if (!isStrokeTool) return
+    setOpenPanel("none")
   }, [activeTool])
 
   useEffect(() => {
@@ -115,6 +137,9 @@ export const Canvas = ({ roomId, socket, room, inviteCode }: CanvasProps) => {
           ...request,
           value: "",
         })
+      },
+      (selection) => {
+        setSelectedShape(selection)
       },
     )
 
@@ -262,6 +287,18 @@ export const Canvas = ({ roomId, socket, room, inviteCode }: CanvasProps) => {
     setTextInput(null)
   }
 
+  const measureTextInputWidth = (value: string, fontSize: number) => {
+    if (!textMeasureCanvasRef.current) {
+      textMeasureCanvasRef.current = document.createElement("canvas")
+    }
+    const context = textMeasureCanvasRef.current.getContext("2d")
+    if (!context) return Math.max(Math.ceil(fontSize * 1.25), 28)
+    context.font = `600 ${fontSize}px ${TEXT_INPUT_FONT_FAMILY}`
+    const text = value.length > 0 ? `${value}\u2009` : "M"
+    const measured = context.measureText(text).width
+    return Math.max(Math.ceil(fontSize * 1.25), Math.ceil(measured + fontSize * 0.6))
+  }
+
   const parseMermaidSize = (svg: string) => {
     const viewBoxMatch = svg.match(/viewBox=\"([^\"]+)\"/)
     if (viewBoxMatch?.[1]) {
@@ -280,32 +317,63 @@ export const Canvas = ({ roomId, socket, room, inviteCode }: CanvasProps) => {
 
   const handleInsertMermaid = async (definition: string) => {
     if (!game) {
-      throw new Error("Canvas is not ready yet")
+      setMermaidUpdateError("Canvas is not ready yet")
+      return
     }
     const trimmed = definition.trim()
     if (!trimmed) {
-      throw new Error("Mermaid definition is empty")
+      setMermaidUpdateError("Mermaid definition is empty")
+      return
     }
 
-    const mermaidModule = await import("mermaid")
-    const mermaid = mermaidModule.default
-    mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: "loose",
-      theme: "dark",
-    })
-
-    const diagramId = `drawr-mermaid-${Date.now()}`
-    const renderResult = await mermaid.render(diagramId, trimmed)
-    const size = parseMermaidSize(renderResult.svg)
-    const center = game.getViewportCenter()
-    game.addMermaidShape(center.x - size.width / 2, center.y - size.height / 2, size.width, size.height, renderResult.svg, opacity)
-    game.selectLastShape()
-    if (!toolLocked) {
-      setReturnToolAfterSelect("select")
+    setIsMermaidUpdating(true)
+    setMermaidUpdateError(null)
+    try {
+      game.addMermaidEditableDiagram(trimmed, opacity)
+      setOpenPanel("none")
+      setMermaidEditor("")
+      setReturnToolAfterSelect(null)
       setActiveTool("select")
+    } catch (error) {
+      setMermaidUpdateError(error instanceof Error ? error.message : "Failed to insert Mermaid diagram")
+    } finally {
+      setIsMermaidUpdating(false)
     }
   }
+
+  const handleUpdateSelectedMermaid = async () => {
+    if (!game || selectedShape?.type !== "mermaid") return
+    const trimmed = mermaidEditor.trim()
+    if (!trimmed) {
+      setMermaidUpdateError("Mermaid definition is empty")
+      return
+    }
+    setIsMermaidUpdating(true)
+    setMermaidUpdateError(null)
+    try {
+      const mermaidModule = await import("mermaid")
+      const mermaid = mermaidModule.default
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: "loose",
+        theme: "dark",
+      })
+      const diagramId = `drawr-mermaid-edit-${Date.now()}`
+      const renderResult = await mermaid.render(diagramId, trimmed)
+      const size = parseMermaidSize(renderResult.svg)
+      game.updateSelectedMermaid(trimmed, renderResult.svg, size.width, size.height)
+      setOpenPanel("none")
+      setReturnToolAfterSelect(null)
+      setActiveTool("select")
+    } catch (error) {
+      setMermaidUpdateError(error instanceof Error ? error.message : "Failed to update Mermaid diagram")
+    } finally {
+      setIsMermaidUpdating(false)
+    }
+  }
+
+  const isSelectMenuOpen = openPanel === "menu"
+  const isMermaidPanelOpen = openPanel === "mermaid"
 
   return (
     <div className="h-screen w-full">
@@ -314,32 +382,45 @@ export const Canvas = ({ roomId, socket, room, inviteCode }: CanvasProps) => {
         setActiveTool={setActiveTool}
         toolLocked={toolLocked}
         setToolLocked={setToolLocked}
+        mermaidPanelOpen={isMermaidPanelOpen}
+        onToggleMermaidPanel={() => {
+          setOpenPanel((current) => (current === "mermaid" ? "none" : "mermaid"))
+          setMermaidUpdateError(null)
+        }}
       />
       <ShareButton inviteCode={inviteCode} />
       <PresenceBar users={presenceUsers} />
-      <Sidebar
-        activeTool={activeTool}
-        strokeFill={strokeFill}
-        setStrokeFill={setStrokeFill}
-        strokeWidth={strokeWidth}
-        setStrokeWidth={setStrokeWidth}
-        bgFill={bgFill}
-        setBgFill={setBgFill}
-        opacity={opacity}
-        setOpacity={setOpacity}
-        strokeStyle={strokeStyle}
-        setStrokeStyle={setStrokeStyle}
-        fontSize={fontSize}
-        setFontSize={setFontSize}
-        onInsertMermaid={handleInsertMermaid}
+      {!isSelectMenuOpen && !isMermaidPanelOpen ? (
+        <Sidebar
+          activeTool={activeTool}
+          strokeFill={strokeFill}
+          setStrokeFill={setStrokeFill}
+          strokeWidth={strokeWidth}
+          setStrokeWidth={setStrokeWidth}
+          bgFill={bgFill}
+          setBgFill={setBgFill}
+          opacity={opacity}
+          setOpacity={setOpacity}
+          strokeStyle={strokeStyle}
+          setStrokeStyle={setStrokeStyle}
+          fontSize={fontSize}
+          setFontSize={setFontSize}
+        />
+      ) : null}
+      <Scale
+        scale={scale}
+        onZoomOut={() => game?.zoomBy(-0.1)}
+        onZoomIn={() => game?.zoomBy(0.1)}
+        onUndo={() => game?.undo()}
+        onRedo={() => game?.redo()}
       />
-      <Scale scale={scale} />
 
-      {activeTool === "select" ? (
-        <div className="fixed left-4 top-4 z-[60]">
+      <div className="fixed left-4 top-4 z-[60]">
           <button
             type="button"
-            onClick={() => setIsSelectMenuOpen((open) => !open)}
+            onClick={() => {
+              setOpenPanel((current) => (current === "menu" ? "none" : "menu"))
+            }}
             className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-[#1f2026]/95 text-white/80 shadow-lg backdrop-blur transition hover:bg-[#2a2d37] hover:text-white"
             aria-label={isSelectMenuOpen ? "Close menu" : "Open menu"}
             title={isSelectMenuOpen ? "Close menu" : "Open menu"}
@@ -362,9 +443,43 @@ export const Canvas = ({ roomId, socket, room, inviteCode }: CanvasProps) => {
                   danger
                 />
               </div>
+              {selectedShape ? (
+                <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.04] p-2">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-white/55">Selection</p>
+                  <p className="mt-1 text-sm text-white/85">{selectedShape.type}</p>
+                </div>
+              ) : null}
               {importError ? <p className="mt-2 text-xs text-red-300">{importError}</p> : null}
             </div>
           ) : null}
+      </div>
+
+      {isMermaidPanelOpen ? (
+        <div className="fixed left-1/2 top-20 z-[65] w-[min(44rem,94vw)] -translate-x-1/2 rounded-xl border border-white/15 bg-[#1f2026]/95 p-4 text-white shadow-xl backdrop-blur">
+          <p className="mb-2 text-xs uppercase tracking-[0.2em] text-white/55">
+            {selectedShape?.type === "mermaid" ? "Edit Mermaid" : "Insert Mermaid"}
+          </p>
+          <textarea
+            rows={14}
+            value={mermaidEditor}
+            onChange={(event) => setMermaidEditor(event.target.value)}
+            className="w-full resize-y bg-transparent p-0 text-sm text-white/90 outline-none border-0 shadow-none"
+            placeholder="graph TD\nA[Start] --> B{Decision}\nB -->|Yes| C[Action]\nB -->|No| D[Stop]"
+          />
+          <button
+            type="button"
+            onClick={() => void (selectedShape?.type === "mermaid" ? handleUpdateSelectedMermaid() : handleInsertMermaid(mermaidEditor))}
+            disabled={isMermaidUpdating}
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-blue-400/55 bg-blue-500/20 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-blue-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Save className="h-3.5 w-3.5" />
+            {isMermaidUpdating
+              ? "Rendering..."
+              : selectedShape?.type === "mermaid"
+                ? "Update Mermaid"
+                : "Insert Mermaid"}
+          </button>
+          {mermaidUpdateError ? <p className="mt-2 text-xs text-red-300">{mermaidUpdateError}</p> : null}
         </div>
       ) : null}
 
@@ -380,6 +495,9 @@ export const Canvas = ({ roomId, socket, room, inviteCode }: CanvasProps) => {
         <input
           autoFocus
           value={textInput.value}
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
           onChange={(event) => setTextInput((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
@@ -392,14 +510,18 @@ export const Canvas = ({ roomId, socket, room, inviteCode }: CanvasProps) => {
             }
           }}
           onBlur={handleTextSubmit}
-          className="fixed z-[70] min-w-44 rounded-md border border-white/25 bg-[#11131a]/95 px-2 py-1 text-sm text-white outline-none ring-1 ring-blue-400/40"
+          className="fixed z-[70] bg-transparent p-0 leading-none outline-none ring-0 border-0 shadow-none"
           style={{
-            left: textInput.screenX + 8,
-            top: textInput.screenY + 8,
+            left: textInput.screenX,
+            top: textInput.screenY - Math.round(textInput.fontSize * 0.2),
             fontSize: textInput.fontSize,
             color: textInput.strokeFill,
+            caretColor: textInput.strokeFill,
+            width: measureTextInputWidth(textInput.value, textInput.fontSize),
+            fontFamily: TEXT_INPUT_FONT_FAMILY,
+            fontWeight: 600,
+            letterSpacing: "0.01em",
           }}
-          placeholder="Type text and press Enter"
         />
       ) : null}
 

@@ -2,7 +2,6 @@ import {
   Circle,
   Eraser,
   HandIcon,
-  Image,
   Pencil,
   RectangleHorizontalIcon,
   Slash,
@@ -11,6 +10,9 @@ import {
   Diamond,
   Triangle,
   Type,
+  Waypoints,
+  Lock,
+  Unlock,
 } from "lucide-react"
 import { ToolButton } from "./ToolButton"
 import { Tool } from "@/canvas/Canvas"
@@ -22,9 +24,18 @@ interface ToolbarProps {
   setActiveTool: (s: Tool) => void
   toolLocked: boolean
   setToolLocked: (next: boolean) => void
+  mermaidPanelOpen: boolean
+  onToggleMermaidPanel: () => void
 }
 
-export const Toolbar = ({ activeTool, setActiveTool, toolLocked, setToolLocked }: ToolbarProps) => {
+export const Toolbar = ({
+  activeTool,
+  setActiveTool,
+  toolLocked,
+  setToolLocked,
+  mermaidPanelOpen,
+  onToggleMermaidPanel,
+}: ToolbarProps) => {
   const groups: { tool: Tool; icon: ReactNode; shortcut: string; badge: string }[][] = [
     [
       { tool: "select", icon: <MousePointer2 className="h-4 w-4" />, shortcut: "V", badge: "1" },
@@ -40,9 +51,7 @@ export const Toolbar = ({ activeTool, setActiveTool, toolLocked, setToolLocked }
       { tool: "diamond", icon: <Diamond className="h-4 w-4" />, shortcut: "D", badge: "9" },
       { tool: "triangle", icon: <Triangle className="h-4 w-4" />, shortcut: "G", badge: "0" },
     ],
-    [
-      { tool: "erase", icon: <Eraser className="h-4 w-4" />, shortcut: "E", badge: "-" },
-    ],
+    [{ tool: "erase", icon: <Eraser className="h-4 w-4" />, shortcut: "E", badge: "-" }],
   ]
 
   return (
@@ -67,16 +76,22 @@ export const Toolbar = ({ activeTool, setActiveTool, toolLocked, setToolLocked }
 
         <button
           type="button"
+          onClick={onToggleMermaidPanel}
+          className={`rounded-lg p-2 transition-colors ${mermaidPanelOpen ? "bg-[#5f5fcf] text-white" : "text-white/70 hover:bg-white/10 hover:text-white"}`}
+          title="Mermaid panel"
+          aria-label="Toggle Mermaid panel"
+        >
+          <Waypoints className="h-4 w-4" />
+        </button>
+
+        <button
+          type="button"
           onClick={() => setToolLocked(!toolLocked)}
-          className={`rounded-lg p-2 transition-colors ${
-            toolLocked
-              ? "bg-[#5f5fcf] text-white"
-              : "text-white/70 hover:bg-white/10 hover:text-white"
-          }`}
+          className={`rounded-lg p-2 transition-colors ${toolLocked ? "bg-[#5f5fcf] text-white" : "text-white/70 hover:bg-white/10 hover:text-white"}`}
           title={toolLocked ? "Keep selected tool active" : "Switch to selection after draw"}
           aria-label={toolLocked ? "Disable tool lock" : "Enable tool lock"}
         >
-          <Image className="h-4 w-4" />
+          {toolLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
         </button>
       </div>
       <p className="mt-1 text-center text-[10px] text-white/40">Esc: select, Space: hand tool, Scroll/Pinch: zoom</p>

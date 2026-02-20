@@ -6,12 +6,17 @@ import brcypt from "bcryptjs"
 import jwt from "jsonwebtoken"
 import 'dotenv/config'
 import cors from "cors"
-import { middleware } from "./middleware";
+import { extractAuthToken, middleware, verifyAuthToken } from "./middleware";
 import { randomBytes, randomUUID } from "crypto"
 
 const app = express()
 const logger = createLogger({ service: "http-backend" })
 const port = Number(process.env.HTTP_PORT ?? 3001)
+const jwtExpiresIn = process.env.JWT_EXPIRES_IN ?? "7d"
+const corsOrigins = (process.env.CORS_ORIGINS ?? "http://127.0.0.1:3000,http://localhost:3000")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean)
 
 const isLegacyRoomSchemaError = (error: unknown): boolean => {
     if (!error || typeof error !== "object") {
@@ -40,7 +45,20 @@ const isLegacyRoomSchemaError = (error: unknown): boolean => {
 }
 
 app.use(express.json())
-app.use(cors())
+app.use(cors({
+    origin: (origin, callback) => {
+        if (!origin) {
+            callback(null, true)
+            return
+        }
+        if (corsOrigins.includes(origin)) {
+            callback(null, true)
+            return
+        }
+        callback(new Error("Not allowed by CORS"))
+    },
+    credentials: true,
+}))
 app.use((req, res, next) => {
     const incomingRequestId = req.header("x-request-id")
     const requestId = incomingRequestId && incomingRequestId.trim() ? incomingRequestId : randomUUID()
@@ -152,7 +170,11 @@ app.post("/signin", async (req,res)=> {
             return;
         }
 
-        const token = jwt.sign({userId : user.id} , process.env.JWT_SECRET!)
+        const token = jwt.sign(
+            {userId : user.id},
+            process.env.JWT_SECRET!,
+            { expiresIn: jwtExpiresIn }
+        )
 
         res.json({
             token
@@ -190,7 +212,11 @@ app.post("/signin/demo", async (req, res) => {
             })
         }
 
-        const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!)
+        const token = jwt.sign(
+            { userId: user.id },
+            process.env.JWT_SECRET!,
+            { expiresIn: jwtExpiresIn }
+        )
         res.json({
             token,
             user: {
@@ -365,7 +391,24 @@ app.get("/room/:roomName", async (req, res)=> {
             return;
         }
 
+        const authHeader = req.headers["authorization"]
+        const token = extractAuthToken(authHeader)
+        const userId = verifyAuthToken(token)
         const invite = typeof req.query.invite === "string" ? req.query.invite : undefined
+
+        if (room.isPrivate) {
+            if (!userId) {
+                res.status(401).json({ error: "Unauthorized!" })
+                return
+            }
+            const ownsRoom = room.userId === userId
+            const hasValidInvite = Boolean(invite && room.inviteCode && invite === room.inviteCode)
+            if (!ownsRoom && !hasValidInvite) {
+                res.status(403).json({ error: "Private room access denied" })
+                return
+            }
+        }
+
         const payloadRoom = {
             ...room,
             inviteCode: room.isPrivate && room.inviteCode === invite ? room.inviteCode : undefined

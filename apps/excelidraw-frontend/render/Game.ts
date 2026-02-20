@@ -7,6 +7,9 @@ import rough from "roughjs/bin/rough"
 type StrokeStyle = "solid" | "dashed" | "dotted";
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
 type ShapeBounds = { minX: number; minY: number; maxX: number; maxY: number };
+const CANVAS_TEXT_FONT_FAMILY = "\"Caveat\", \"Comic Sans MS\", \"Segoe Print\", cursive"
+const SVG_TEXT_FONT_FAMILY = "'Caveat','Comic Sans MS','Segoe Print',cursive"
+type MermaidDirection = "TD" | "TB" | "BT" | "LR" | "RL"
 
 type Shape = {
     type: "rect";
@@ -252,10 +255,12 @@ export class Game {
                 this.existingShape = this.existingShape.filter(
                     (shape) => JSON.stringify(shape) !== JSON.stringify(parsedShape.shape)
                 );
+              this.setSelectedShapeIndex(null)
               this.clearCanvas()
             }
             else if(data.type === "reset"){
                 this.existingShape = []
+                this.setSelectedShapeIndex(null)
                 this.clearCanvas()
             }
             else if(data.type === "bulk_draw"){
@@ -315,6 +320,9 @@ export class Game {
     }
 
     private setSelectedShapeIndex(index: number | null) {
+        if (this.selectedShapeIndex === index) {
+            return
+        }
         this.selectedShapeIndex = index
         if (index === null) {
             this.hoveredShapeIndex = null
@@ -412,7 +420,7 @@ export class Game {
         }))
     }
 
-    addMermaidShape(x: number, y: number, width: number, height: number, svg: string, opacity: number = 1) {
+    addMermaidShape(x: number, y: number, width: number, height: number, source: string, svg: string, opacity: number = 1) {
         const normalizedWidth = Math.max(width, 20)
         const normalizedHeight = Math.max(height, 20)
         const shape: Shape = {
@@ -421,6 +429,7 @@ export class Game {
             y,
             width: normalizedWidth,
             height: normalizedHeight,
+            source,
             svg,
             opacity,
         }
@@ -432,6 +441,238 @@ export class Game {
             data: JSON.stringify({ shape }),
             roomId: this.roomId,
         }))
+    }
+
+    addMermaidEditableDiagram(definition: string, opacity: number = 1) {
+        const parsed = this.parseMermaidDefinition(definition)
+        if (parsed.nodes.length === 0) {
+            throw new Error("No Mermaid nodes found. Add node lines such as A[Start] --> B{Decision}.")
+        }
+
+        const nodeOrder = parsed.nodes
+        const total = nodeOrder.length
+        const direction = parsed.direction
+        const vertical = direction === "TD" || direction === "TB"
+        const reverse = direction === "BT" || direction === "RL"
+
+        const nodeGapPrimary = 190
+        const secondaryOffset = 160
+        const center = this.getViewportCenter()
+        const startX = center.x - (vertical ? secondaryOffset : ((Math.max(total - 1, 0) * nodeGapPrimary) / 2))
+        const startY = center.y - (vertical ? ((Math.max(total - 1, 0) * nodeGapPrimary) / 2) : secondaryOffset)
+
+        const positionById = new Map<string, { x: number; y: number; w: number; h: number; kind: "rect" | "diamond" | "ellipse"; label: string }>()
+        nodeOrder.forEach((node, index) => {
+            const orderIndex = reverse ? total - index - 1 : index
+            const w = node.kind === "diamond" ? 150 : Math.max(130, Math.min(280, node.label.length * 10 + 34))
+            const h = node.kind === "diamond" ? 100 : 74
+            const x = vertical ? startX : startX + orderIndex * nodeGapPrimary
+            const y = vertical ? startY + orderIndex * nodeGapPrimary : startY
+            positionById.set(node.id, { x, y, w, h, kind: node.kind, label: node.label })
+        })
+
+        const shapes: Shape[] = []
+        const labelFontSize = Math.max(16, Math.min(this.fontSize, 28))
+
+        positionById.forEach((node) => {
+            if (node.kind === "diamond") {
+                shapes.push({
+                    type: "diamond",
+                    x: node.x,
+                    y: node.y,
+                    width: node.w,
+                    height: node.h,
+                    strokeWidth: this.strokeWidth,
+                    strokeFill: this.strokeFill,
+                    bgFill: this.bgFill,
+                    opacity,
+                    strokeStyle: this.strokeStyle,
+                })
+            } else if (node.kind === "ellipse") {
+                shapes.push({
+                    type: "ellipse",
+                    centerX: node.x + node.w / 2,
+                    centerY: node.y + node.h / 2,
+                    radX: node.w / 2,
+                    radY: node.h / 2,
+                    strokeWidth: this.strokeWidth,
+                    strokeFill: this.strokeFill,
+                    bgFill: this.bgFill,
+                    opacity,
+                    strokeStyle: this.strokeStyle,
+                })
+            } else {
+                shapes.push({
+                    type: "rect",
+                    x: node.x,
+                    y: node.y,
+                    width: node.w,
+                    height: node.h,
+                    strokeWidth: this.strokeWidth,
+                    strokeFill: this.strokeFill,
+                    bgFill: this.bgFill,
+                    opacity,
+                    strokeStyle: this.strokeStyle,
+                })
+            }
+
+            shapes.push({
+                type: "text",
+                x: node.x + 14,
+                y: node.y + 20,
+                text: node.label,
+                fontSize: labelFontSize,
+                strokeFill: this.strokeFill,
+                opacity,
+            })
+        })
+
+        const getAnchor = (
+            from: { x: number; y: number; w: number; h: number },
+            to: { x: number; y: number; w: number; h: number },
+        ) => {
+            const fromCx = from.x + from.w / 2
+            const fromCy = from.y + from.h / 2
+            const toCx = to.x + to.w / 2
+            const toCy = to.y + to.h / 2
+
+            if (Math.abs(toCx - fromCx) >= Math.abs(toCy - fromCy)) {
+                const leftToRight = toCx >= fromCx
+                return {
+                    fromX: leftToRight ? from.x + from.w : from.x,
+                    fromY: fromCy,
+                    toX: leftToRight ? to.x : to.x + to.w,
+                    toY: toCy,
+                }
+            }
+
+            const topToBottom = toCy >= fromCy
+            return {
+                fromX: fromCx,
+                fromY: topToBottom ? from.y + from.h : from.y,
+                toX: toCx,
+                toY: topToBottom ? to.y : to.y + to.h,
+            }
+        }
+
+        parsed.edges.forEach((edge) => {
+            const from = positionById.get(edge.from)
+            const to = positionById.get(edge.to)
+            if (!from || !to) return
+            const anchor = getAnchor(from, to)
+            shapes.push({
+                type: "arrow",
+                fromX: anchor.fromX,
+                fromY: anchor.fromY,
+                toX: anchor.toX,
+                toY: anchor.toY,
+                strokeWidth: this.strokeWidth,
+                strokeFill: this.strokeFill,
+                opacity,
+                strokeStyle: this.strokeStyle,
+            })
+        })
+
+        if (shapes.length === 0) {
+            throw new Error("Could not generate editable shapes from Mermaid input.")
+        }
+
+        this.existingShape.push(...shapes)
+        this.saveToHistory()
+        this.setSelectedShapeIndex(this.existingShape.length - 1)
+        this.clearCanvas()
+        this.socket.send(JSON.stringify({
+            type: "bulk_draw",
+            roomId: this.roomId,
+            shapes,
+        }))
+    }
+
+    private parseMermaidDefinition(definition: string) {
+        const lines = definition
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0 && !line.startsWith("%%"))
+
+        let direction: MermaidDirection = "TD"
+        const first = lines[0]?.toLowerCase()
+        if (first?.startsWith("graph")) {
+            const match = lines[0]?.match(/\b(TD|TB|BT|LR|RL)\b/i)
+            if (match?.[1]) {
+                direction = match[1].toUpperCase() as MermaidDirection
+            }
+            lines.shift()
+        }
+
+        const nodeMap = new Map<string, { id: string; label: string; kind: "rect" | "diamond" | "ellipse" }>()
+        const edges: Array<{ from: string; to: string }> = []
+        let anonymousId = 1
+
+        const normalizeId = (id: string) => id.trim().replace(/\s+/g, "_").replace(/[^\w:-]/g, "_")
+        const stripQuotes = (value: string) => value.trim().replace(/^["']|["']$/g, "")
+        const createNode = (rawToken: string) => {
+            const token = rawToken.trim().replace(/;$/, "")
+            if (!token) return null
+
+            const shapes = [
+                { regex: /^([\w:-]+)\{(.+)\}$/, kind: "diamond" as const },
+                { regex: /^([\w:-]+)\[\((.+)\)\]$/, kind: "ellipse" as const },
+                { regex: /^([\w:-]+)\(\((.+)\)\)$/, kind: "ellipse" as const },
+                { regex: /^([\w:-]+)\((.+)\)$/, kind: "ellipse" as const },
+                { regex: /^([\w:-]+)\[(.+)\]$/, kind: "rect" as const },
+            ]
+
+            for (const shape of shapes) {
+                const match = token.match(shape.regex)
+                if (match?.[1] && match[2]) {
+                    const id = normalizeId(match[1])
+                    const label = stripQuotes(match[2])
+                    return { id, label: label || id, kind: shape.kind }
+                }
+            }
+
+            const fallbackId = normalizeId(token)
+            if (fallbackId) {
+                return { id: fallbackId, label: stripQuotes(token), kind: "rect" as const }
+            }
+
+            const anon = `node_${anonymousId++}`
+            return { id: anon, label: anon, kind: "rect" as const }
+        }
+
+        const ensureNode = (rawToken: string) => {
+            const parsed = createNode(rawToken)
+            if (!parsed) return null
+            if (!nodeMap.has(parsed.id)) {
+                nodeMap.set(parsed.id, parsed)
+            }
+            return parsed.id
+        }
+
+        lines.forEach((rawLine) => {
+            if (/^(classDef|class|style|linkStyle|click|subgraph|end)\b/i.test(rawLine)) {
+                return
+            }
+            const line = rawLine.replace(/\|[^|]*\|/g, "").replace(/==>/g, "-->").replace(/-.->/g, "-->")
+            if (line.includes("-->")) {
+                const parts = line.split("-->").map((part) => part.trim()).filter(Boolean)
+                for (let index = 0; index < parts.length - 1; index++) {
+                    const from = ensureNode(parts[index] || "")
+                    const to = ensureNode(parts[index + 1] || "")
+                    if (from && to) {
+                        edges.push({ from, to })
+                    }
+                }
+                return
+            }
+            ensureNode(line)
+        })
+
+        return {
+            direction,
+            nodes: Array.from(nodeMap.values()),
+            edges,
+        }
     }
 
     saveToHistory(){
@@ -533,6 +774,9 @@ export class Game {
                     this.drawSelectionOutline(hoveredShape, false, null)
                 }
             }
+            if (this.isBoxSelecting && this.selectionBox) {
+                this.drawSelectionBox(this.selectionBox)
+            }
         }
 
         this.drawRemoteCursors()
@@ -576,9 +820,7 @@ export class Game {
             if (hitIndex !== -1) {
                 const shape = this.existingShape[hitIndex]
                 if (!shape) return
-                this.selectedShapeIndex = hitIndex
-                this.hoveredShapeIndex = hitIndex
-                this.hoveredResizeHandle = null
+                this.setSelectedShapeIndex(hitIndex)
                 this.isDragging = true
                 
                 // Calculate offset for smooth dragging with type guards
@@ -603,19 +845,20 @@ export class Game {
                 } else if (shape.type === "text" && 'x' in shape && 'y' in shape) {
                     this.dragOffsetX = x - shape.x
                     this.dragOffsetY = y - shape.y
+                } else if (shape.type === "mermaid" && 'x' in shape && 'y' in shape) {
+                    this.dragOffsetX = x - shape.x
+                    this.dragOffsetY = y - shape.y
                 }
                 this.updateCursor()
                 this.clearCanvas()
                 return
             }
-            // Clicked on empty space - deselect
-            this.selectedShapeIndex = null
-            this.hoveredShapeIndex = null
-            this.hoveredResizeHandle = null
-            this.activeResizeHandle = null
+            this.isBoxSelecting = true
+            this.selectionBox = { startX: x, startY: y, endX: x, endY: y }
+            this.setSelectedShapeIndex(null)
             this.updateCursor()
             this.clearCanvas()
-            this.onEmptySelectClickCallback?.()
+            return
         }
         else if(this.activeTool === "pencil"){
             this.existingShape.push({
@@ -677,6 +920,21 @@ export class Game {
             const {x ,y} = this.transformPanScale(e.clientX , e.clientY)
             const previewX = x
             const previewY = y
+
+            if (this.activeTool === "select" && this.isBoxSelecting && this.selectionBox) {
+                this.selectionBox.endX = x
+                this.selectionBox.endY = y
+                const bounds: ShapeBounds = {
+                    minX: Math.min(this.selectionBox.startX, this.selectionBox.endX),
+                    minY: Math.min(this.selectionBox.startY, this.selectionBox.endY),
+                    maxX: Math.max(this.selectionBox.startX, this.selectionBox.endX),
+                    maxY: Math.max(this.selectionBox.startY, this.selectionBox.endY),
+                }
+                this.setSelectedShapeIndex(this.findTopShapeIndexInBounds(bounds))
+                this.clearCanvas()
+                this.updateCursor()
+                return
+            }
 
             if (
                 this.isResizing &&
@@ -821,6 +1079,40 @@ export class Game {
             }
 
         }
+    }
+
+    private drawSelectionBox(box: { startX: number; startY: number; endX: number; endY: number }) {
+        const minX = Math.min(box.startX, box.endX)
+        const maxX = Math.max(box.startX, box.endX)
+        const minY = Math.min(box.startY, box.endY)
+        const maxY = Math.max(box.startY, box.endY)
+        this.ctx.save()
+        this.ctx.strokeStyle = "rgba(99, 172, 255, 0.9)"
+        this.ctx.lineWidth = 1 / this.scale
+        this.ctx.setLineDash([6 / this.scale, 4 / this.scale])
+        this.ctx.strokeRect(minX, minY, maxX - minX, maxY - minY)
+        this.ctx.restore()
+    }
+
+    private shapeFullyWithinBounds(shape: Shape, bounds: ShapeBounds) {
+        const shapeBounds = this.getShapeBounds(shape)
+        if (!shapeBounds) return false
+        return (
+            shapeBounds.minX >= bounds.minX &&
+            shapeBounds.maxX <= bounds.maxX &&
+            shapeBounds.minY >= bounds.minY &&
+            shapeBounds.maxY <= bounds.maxY
+        )
+    }
+
+    private findTopShapeIndexInBounds(bounds: ShapeBounds) {
+        for (let i = this.existingShape.length - 1; i >= 0; i--) {
+            const shape = this.existingShape[i]
+            if (shape && this.shapeFullyWithinBounds(shape, bounds)) {
+                return i
+            }
+        }
+        return null
     }
 
 
@@ -1463,7 +1755,7 @@ export class Game {
         const previousAlpha = this.ctx.globalAlpha;
         this.ctx.globalAlpha = opacity;
 
-        this.ctx.font = `${fontSize}px Inter, Arial, sans-serif`;
+        this.ctx.font = `600 ${fontSize}px ${CANVAS_TEXT_FONT_FAMILY}`;
         this.ctx.fillStyle = strokeFill;
         this.ctx.textBaseline = "top";
         this.ctx.fillText(text, x, y);
@@ -1529,6 +1821,33 @@ export class Game {
     mouseUpHandler = (e: MouseEvent) => {
         this.clicked= false
         this.updateCursor()
+
+        if (this.activeTool === "select" && this.isBoxSelecting && this.selectionBox) {
+            const bounds: ShapeBounds = {
+                minX: Math.min(this.selectionBox.startX, this.selectionBox.endX),
+                minY: Math.min(this.selectionBox.startY, this.selectionBox.endY),
+                maxX: Math.max(this.selectionBox.startX, this.selectionBox.endX),
+                maxY: Math.max(this.selectionBox.startY, this.selectionBox.endY),
+            }
+            this.isBoxSelecting = false
+            this.selectionBox = null
+
+            const dragDistance = Math.hypot(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY)
+            if (dragDistance < 4 / this.scale) {
+                this.setSelectedShapeIndex(null)
+                this.clearCanvas()
+                this.onEmptySelectClickCallback?.()
+                return
+            }
+
+            const selectedIndex = this.findTopShapeIndexInBounds(bounds)
+            this.setSelectedShapeIndex(selectedIndex)
+            this.clearCanvas()
+            if (selectedIndex === null) {
+                this.onEmptySelectClickCallback?.()
+            }
+            return
+        }
 
         if (this.isResizing && this.selectedShapeIndex !== null) {
             this.isResizing = false
@@ -1886,10 +2205,9 @@ export class Game {
 
     resetCanvas() {
         this.existingShape = []
-        this.selectedShapeIndex = null
-        this.hoveredShapeIndex = null
-        this.hoveredResizeHandle = null
-        this.activeResizeHandle = null
+        this.isBoxSelecting = false
+        this.selectionBox = null
+        this.setSelectedShapeIndex(null)
         this.clearCanvas()
         this.saveToHistory()
         this.persistSnapshot()
@@ -1912,6 +2230,7 @@ export class Game {
         }
 
         this.existingShape = [...parsed.shapes]
+        this.setSelectedShapeIndex(null)
         this.clearCanvas()
         this.saveToHistory()
         this.persistSnapshot()
@@ -1989,7 +2308,7 @@ export class Game {
                 return `<path d="${d}" fill="none" stroke="${shape.strokeFill}" stroke-width="${shape.strokeWidth}" stroke-dasharray="${strokeDash}" opacity="${shape.opacity}" stroke-linecap="round" stroke-linejoin="round" />`
             }
             case "text": {
-                return `<text x="${shape.x}" y="${shape.y}" font-family="Inter, Arial, sans-serif" font-size="${shape.fontSize}" fill="${shape.strokeFill}" opacity="${shape.opacity}">${this.escapeSvgText(shape.text)}</text>`
+                return `<text x="${shape.x}" y="${shape.y}" font-family="${SVG_TEXT_FONT_FAMILY}" font-size="${shape.fontSize}" font-weight="600" fill="${shape.strokeFill}" opacity="${shape.opacity}">${this.escapeSvgText(shape.text)}</text>`
             }
             case "mermaid": {
                 const href = this.toSvgDataUri(shape.svg)

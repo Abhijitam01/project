@@ -2,11 +2,11 @@
 
 import { DashboardSidebar } from "./DashboardSidebar";
 import { useUser } from "@/hooks/useUser";
-import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@repo/ui/button";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { DashboardShellSkeleton } from "@/components/loading-skeletons";
 
 export function DashboardLayout({ children }: { children: (username: string, rooms: { id: string; roomName: string }[]) => React.ReactNode }) {
   const { user, isLoading, error, reload } = useUser();
@@ -19,14 +19,7 @@ export function DashboardLayout({ children }: { children: (username: string, roo
   }, [error, router]);
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 animate-spin text-primary" />
-          <p className="text-muted-foreground font-medium">Loading your space...</p>
-        </div>
-      </div>
-    );
+    return <DashboardShellSkeleton />;
   }
 
   if (error === "AUTH_REQUIRED") {
