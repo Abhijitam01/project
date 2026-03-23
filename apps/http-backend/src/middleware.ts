@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from "express"
 import { verifyUserJwt } from "@repo/common/jwt"
-import "dotenv/config"
 
 declare global {
   namespace Express {

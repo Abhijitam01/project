@@ -102,6 +102,9 @@ importers:
       autoprefixer:
         specifier: ^10.4.20
         version: 10.4.20(postcss@8.5.1)
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.4.7
       postcss:
         specifier: ^8.5.1
         version: 8.5.1
@@ -126,9 +129,6 @@ importers:
       cors:
         specifier: ^2.8.5
         version: 2.8.5
-      dotenv:
-        specifier: ^16.4.7
-        version: 16.4.7
       express:
         specifier: ^4.21.2
         version: 4.21.2
@@ -160,9 +160,6 @@ importers:
       '@repo/db':
         specifier: workspace:*
         version: link:../../packages/db
-      dotenv:
-        specifier: ^16.4.7
-        version: 16.4.7
       ws:
         specifier: ^8.18.0
         version: 8.18.0
@@ -182,6 +179,9 @@ importers:
 
   packages/common:
     dependencies:
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.4.7
       jose:
         specifier: ^5.9.6
         version: 5.10.0

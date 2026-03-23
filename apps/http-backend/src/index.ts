@@ -1,10 +1,10 @@
-import { prismaClient } from "@repo/db/client";
+import "@repo/common/env-bootstrap"
+import { prismaClient } from "@repo/db/client"
 import express from "express"
 import {RegisterSchema, LoginSchema, CreateRoomSchema} from "@repo/common/types"
 import { createLogger } from "@repo/common/logger"
 import brcypt from "bcryptjs"
 import { signUserJwt } from "@repo/common/jwt"
-import "dotenv/config"
 import cors from "cors"
 import { extractAuthToken, middleware, verifyAuthToken } from "./middleware"
 import { prismaErrorToHttpResponse } from "./prisma-http-error"

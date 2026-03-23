@@ -1,10 +1,10 @@
+import "@repo/common/env-bootstrap"
 import { createServer } from "http"
 import {WebSocket, WebSocketServer} from "ws"
 import type { RawData } from "ws"
 import { checkUser } from "./checkUser";
 import {prismaClient} from "@repo/db/client"
 import { createLogger } from "@repo/common/logger"
-import "dotenv/config"
 import { randomUUID } from "crypto"
 
 const logger = createLogger({ service: "ws-backend" })
