@@ -393,6 +393,7 @@ export const Canvas = ({ roomId, socket, room, inviteCode }: CanvasProps) => {
       {!isSelectMenuOpen && !isMermaidPanelOpen ? (
         <Sidebar
           activeTool={activeTool}
+          selectedShape={selectedShape}
           strokeFill={strokeFill}
           setStrokeFill={setStrokeFill}
           strokeWidth={strokeWidth}

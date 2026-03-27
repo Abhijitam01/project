@@ -38,27 +38,27 @@ export const Toolbar = ({
 }: ToolbarProps) => {
   const groups: { tool: Tool; icon: ReactNode; shortcut: string; badge: string }[][] = [
     [
-      { tool: "select", icon: <MousePointer2 className="h-4 w-4" />, shortcut: "V", badge: "1" },
-      { tool: "grab", icon: <HandIcon className="h-4 w-4" />, shortcut: "H", badge: "2" },
+      { tool: "select", icon: <MousePointer2 className="h-4 w-4" />, shortcut: "V", badge: "V" },
+      { tool: "grab", icon: <HandIcon className="h-4 w-4" />, shortcut: "H", badge: "H" },
     ],
     [
-      { tool: "rect", icon: <RectangleHorizontalIcon className="h-4 w-4" />, shortcut: "R", badge: "3" },
-      { tool: "ellipse", icon: <Circle className="h-4 w-4" />, shortcut: "O", badge: "4" },
-      { tool: "arrow", icon: <ArrowUpRight className="h-4 w-4" />, shortcut: "A", badge: "5" },
-      { tool: "line", icon: <Slash className="h-4 w-4" />, shortcut: "L", badge: "6" },
-      { tool: "pencil", icon: <Pencil className="h-4 w-4" />, shortcut: "P", badge: "7" },
-      { tool: "text", icon: <Type className="h-4 w-4" />, shortcut: "T", badge: "8" },
-      { tool: "diamond", icon: <Diamond className="h-4 w-4" />, shortcut: "D", badge: "9" },
-      { tool: "triangle", icon: <Triangle className="h-4 w-4" />, shortcut: "G", badge: "0" },
+      { tool: "rect", icon: <RectangleHorizontalIcon className="h-4 w-4" />, shortcut: "R", badge: "R" },
+      { tool: "ellipse", icon: <Circle className="h-4 w-4" />, shortcut: "O", badge: "O" },
+      { tool: "arrow", icon: <ArrowUpRight className="h-4 w-4" />, shortcut: "A", badge: "A" },
+      { tool: "line", icon: <Slash className="h-4 w-4" />, shortcut: "L", badge: "L" },
+      { tool: "pencil", icon: <Pencil className="h-4 w-4" />, shortcut: "P", badge: "P" },
+      { tool: "text", icon: <Type className="h-4 w-4" />, shortcut: "T", badge: "T" },
+      { tool: "diamond", icon: <Diamond className="h-4 w-4" />, shortcut: "D", badge: "D" },
+      { tool: "triangle", icon: <Triangle className="h-4 w-4" />, shortcut: "G", badge: "G" },
     ],
-    [{ tool: "erase", icon: <Eraser className="h-4 w-4" />, shortcut: "E", badge: "-" }],
+    [{ tool: "erase", icon: <Eraser className="h-4 w-4" />, shortcut: "E", badge: "E" }],
   ]
 
   return (
-    <div className="fixed left-1/2 top-4 z-50 -translate-x-1/2">
-      <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#1a1c24]/95 px-2 py-1.5 text-white shadow-xl backdrop-blur">
+    <div className="fixed left-1/2 top-3 z-50 -translate-x-1/2">
+      <div className="flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-[#1e1e2e]/98 px-2 py-1.5 shadow-[0_4px_24px_rgba(0,0,0,0.5)] backdrop-blur">
         {groups.map((group, groupIndex) => (
-          <div key={`group-${groupIndex}`} className="flex items-center gap-1">
+          <div key={`group-${groupIndex}`} className="flex items-center gap-0.5">
             {group.map((item) => (
               <ToolButton
                 key={item.tool}
@@ -70,16 +70,24 @@ export const Toolbar = ({
                 tool={item.tool}
               />
             ))}
-            {groupIndex < groups.length - 1 ? <Separator orientation="vertical" className="mx-1 h-7 bg-white/15" /> : null}
+            {groupIndex < groups.length - 1 ? (
+              <Separator orientation="vertical" className="mx-1 h-5 bg-white/10" />
+            ) : null}
           </div>
         ))}
+
+        <Separator orientation="vertical" className="mx-1 h-5 bg-white/10" />
 
         <button
           type="button"
           onClick={onToggleMermaidPanel}
-          className={`rounded-lg p-2 transition-colors ${mermaidPanelOpen ? "bg-[#5f5fcf] text-white" : "text-white/70 hover:bg-white/10 hover:text-white"}`}
-          title="Mermaid panel"
+          title="Mermaid diagram"
           aria-label="Toggle Mermaid panel"
+          className={`rounded-lg p-1.5 transition-colors ${
+            mermaidPanelOpen
+              ? "bg-indigo-600 text-white"
+              : "text-white/50 hover:bg-white/[0.08] hover:text-white/80"
+          }`}
         >
           <Waypoints className="h-4 w-4" />
         </button>
@@ -87,14 +95,17 @@ export const Toolbar = ({
         <button
           type="button"
           onClick={() => setToolLocked(!toolLocked)}
-          className={`rounded-lg p-2 transition-colors ${toolLocked ? "bg-[#5f5fcf] text-white" : "text-white/70 hover:bg-white/10 hover:text-white"}`}
-          title={toolLocked ? "Keep selected tool active" : "Switch to selection after draw"}
+          title={toolLocked ? "Tool locked" : "Lock tool"}
           aria-label={toolLocked ? "Disable tool lock" : "Enable tool lock"}
+          className={`rounded-lg p-1.5 transition-colors ${
+            toolLocked
+              ? "bg-indigo-600 text-white"
+              : "text-white/50 hover:bg-white/[0.08] hover:text-white/80"
+          }`}
         >
           {toolLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
         </button>
       </div>
-      <p className="mt-1 text-center text-[10px] text-white/40">Esc: select, Space: hand tool, Scroll/Pinch: zoom</p>
     </div>
   )
 }

@@ -1,8 +1,10 @@
 import { bgFill, strokeFill, strokeWidth, Tool, StrokeStyle } from "@/canvas/Canvas"
+import type { SelectedShapeInfo } from "@/render/Game"
 import React from "react"
 
 interface SidebarProps {
   activeTool: Tool
+  selectedShape: SelectedShapeInfo | null
   strokeFill: strokeFill
   setStrokeFill: React.Dispatch<React.SetStateAction<strokeFill>>
   strokeWidth: strokeWidth
@@ -17,8 +19,31 @@ interface SidebarProps {
   setFontSize: React.Dispatch<React.SetStateAction<number>>
 }
 
+const STROKE_FILLS: strokeFill[] = [
+  "rgba(211, 211, 211)",
+  "rgba(242, 154, 158)",
+  "rgba(77, 161, 83)",
+  "rgba(98, 177, 247)",
+  "rgba(183, 98, 42)",
+]
+
+const BG_FILLS: bgFill[] = [
+  "rgba(0, 0, 0, 0)",
+  "rgba(89, 49, 49)",
+  "rgba(23, 61, 16)",
+  "rgba(30, 70, 101)",
+  "rgba(49, 37, 7)",
+]
+
+const STROKE_WIDTHS: strokeWidth[] = [1, 2, 4]
+const STROKE_STYLES: StrokeStyle[] = ["solid", "dashed", "dotted"]
+
+const SHAPE_TOOLS: Tool[] = ["rect", "ellipse", "diamond", "triangle"]
+const ALL_DRAW_TOOLS: Tool[] = ["rect", "ellipse", "diamond", "triangle", "line", "arrow", "pencil", "text"]
+
 export const Sidebar = ({
   activeTool,
+  selectedShape,
   strokeFill,
   setStrokeFill,
   strokeWidth,
@@ -32,127 +57,144 @@ export const Sidebar = ({
   fontSize,
   setFontSize,
 }: SidebarProps) => {
-  const strokeFills: strokeFill[] = [
-    "rgba(211, 211, 211)",
-    "rgba(242, 154, 158)",
-    "rgba(77, 161, 83)",
-    "rgba(98, 177, 247)",
-    "rgba(183, 98, 42)",
-  ]
+  const isSelectWithShape = activeTool === "select" && selectedShape !== null
+  const isDrawTool = ALL_DRAW_TOOLS.includes(activeTool)
 
-  const strokeWidths: strokeWidth[] = [1, 2, 4]
+  if (activeTool === "erase" || activeTool === "grab") return null
+  if (activeTool === "select" && !selectedShape) return null
 
-  const bgFills: bgFill[] = [
-    "rgba(0, 0, 0, 0)",
-    "rgba(89, 49, 49)",
-    "rgba(23, 61, 16)",
-    "rgba(30, 70, 101)",
-    "rgba(49, 37, 7)",
-  ]
+  const showBgFill =
+    isDrawTool
+      ? SHAPE_TOOLS.includes(activeTool)
+      : isSelectWithShape && selectedShape &&
+        (selectedShape.type === "rect" ||
+          selectedShape.type === "ellipse" ||
+          selectedShape.type === "diamond" ||
+          selectedShape.type === "triangle")
 
-  const strokeStyles: StrokeStyle[] = ["solid", "dashed", "dotted"]
+  const showStrokeStyle =
+    isDrawTool
+      ? activeTool !== "pencil" && activeTool !== "text"
+      : isSelectWithShape && selectedShape &&
+        selectedShape.type !== "pencil" &&
+        selectedShape.type !== "text"
 
-  if (activeTool === "erase" || activeTool === "grab" || activeTool === "select") {
-    return null
-  }
+  const showFontSize =
+    isDrawTool
+      ? activeTool === "text"
+      : isSelectWithShape && selectedShape?.type === "text"
+
+  const toolLabel = isSelectWithShape
+    ? `Selected · ${selectedShape.type}`
+    : activeTool
 
   return (
-    <aside className="fixed left-5 top-24 z-40 w-64 rounded-2xl border border-white/15 bg-[#1f2026]/95 p-4 text-white shadow-xl backdrop-blur">
-      <div className="mb-4 flex items-center justify-between">
-        <p className="text-sm font-semibold tracking-wide text-white/95">Style</p>
-        <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] uppercase text-white/60">{activeTool}</span>
+    <aside className="fixed left-4 top-20 z-40 w-[220px] rounded-xl border border-white/10 bg-[#1e1e2e] p-3 text-white shadow-2xl">
+      {/* Header */}
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-white/40">Properties</p>
+        <span className="rounded-md bg-white/[0.07] px-2 py-0.5 text-[10px] font-medium text-white/50">
+          {toolLabel}
+        </span>
       </div>
 
       <div className="space-y-4">
-        <ControlBlock label="Stroke">
-          <div className="flex flex-wrap gap-2">
-            {strokeFills.map((fill) => (
-              <ColorIndicator
+        {/* Stroke Color */}
+        <Section label="Stroke">
+          <div className="grid grid-cols-5 gap-1.5">
+            {STROKE_FILLS.map((fill) => (
+              <ColorSwatch
                 key={fill}
                 color={fill}
-                onClick={() => setStrokeFill(fill)}
                 isActive={strokeFill === fill}
-                ariaLabel={`Set stroke color ${fill}`}
+                onClick={() => setStrokeFill(fill)}
+                ariaLabel={`Stroke color ${fill}`}
               />
             ))}
           </div>
-        </ControlBlock>
+        </Section>
 
-        {(activeTool === "rect" ||
-          activeTool === "ellipse" ||
-          activeTool === "diamond" ||
-          activeTool === "triangle") && (
-          <ControlBlock label="Background">
-            <div className="flex flex-wrap gap-2">
-              {bgFills.map((fill) => (
-                <ColorIndicator
+        {/* Background */}
+        {showBgFill && (
+          <Section label="Background">
+            <div className="grid grid-cols-5 gap-1.5">
+              {BG_FILLS.map((fill) => (
+                <ColorSwatch
                   key={fill}
                   color={fill}
-                  onClick={() => setBgFill(fill)}
                   isActive={bgFill === fill}
+                  onClick={() => setBgFill(fill)}
                   transparent={fill === "rgba(0, 0, 0, 0)"}
-                  ariaLabel={`Set fill color ${fill}`}
+                  ariaLabel={`Background color ${fill}`}
                 />
               ))}
             </div>
-          </ControlBlock>
+          </Section>
         )}
 
-        <ControlBlock label="Stroke Width">
-          <div className="flex gap-2">
-            {strokeWidths.map((width) => (
+        {/* Stroke Width */}
+        <Section label="Stroke Width">
+          <div className="flex gap-1.5">
+            {STROKE_WIDTHS.map((w) => (
               <button
-                key={width}
+                key={w}
                 type="button"
-                onClick={() => setStrokeWidth(width)}
-                className={`flex h-8 w-10 items-center justify-center rounded border transition-colors ${
-                  strokeWidth === width
-                    ? "border-blue-400/70 bg-blue-500/20"
-                    : "border-white/15 bg-white/5 hover:border-white/30 hover:bg-white/10"
+                onClick={() => setStrokeWidth(w)}
+                aria-label={`Stroke width ${w}`}
+                className={`flex h-8 flex-1 items-center justify-center rounded-md border transition-colors ${
+                  strokeWidth === w
+                    ? "border-indigo-400/60 bg-indigo-500/20 text-white"
+                    : "border-white/10 bg-white/[0.04] text-white/50 hover:border-white/20 hover:bg-white/[0.08]"
                 }`}
-                aria-label={`Set stroke width ${width}`}
               >
-                <span style={{ height: `${width}px` }} className="w-6 bg-white/85" />
+                <span
+                  className="block w-5 rounded-full bg-current"
+                  style={{ height: `${w}px` }}
+                />
               </button>
             ))}
           </div>
-        </ControlBlock>
+        </Section>
 
-        {activeTool !== "pencil" && activeTool !== "text" && (
-          <ControlBlock label="Stroke Style">
-            <div className="grid grid-cols-3 gap-2">
-              {strokeStyles.map((style) => (
+        {/* Stroke Style */}
+        {showStrokeStyle && (
+          <Section label="Stroke Style">
+            <div className="flex gap-1.5">
+              {STROKE_STYLES.map((style) => (
                 <button
                   key={style}
                   type="button"
                   onClick={() => setStrokeStyle(style)}
-                  className={`rounded-md border px-2 py-1 text-xs capitalize transition-colors ${
+                  aria-label={`Stroke style ${style}`}
+                  className={`flex h-8 flex-1 items-center justify-center rounded-md border transition-colors ${
                     strokeStyle === style
-                      ? "border-blue-400/70 bg-blue-500/20 text-white"
-                      : "border-white/15 bg-white/5 text-white/70 hover:border-white/30 hover:bg-white/10"
+                      ? "border-indigo-400/60 bg-indigo-500/20 text-white"
+                      : "border-white/10 bg-white/[0.04] text-white/50 hover:border-white/20 hover:bg-white/[0.08]"
                   }`}
                 >
-                  {style}
+                  <StrokeStyleIcon style={style} />
                 </button>
               ))}
             </div>
-          </ControlBlock>
+          </Section>
         )}
 
-        <ControlBlock label={`Opacity ${Math.round(opacity * 100)}%`}>
+        {/* Opacity */}
+        <Section label={`Opacity ${Math.round(opacity * 100)}%`}>
           <input
             type="range"
             min="0"
             max="1"
-            step="0.1"
+            step="0.05"
             value={opacity}
             onChange={(e) => setOpacity(Number.parseFloat(e.target.value))}
-            className="w-full accent-blue-300"
+            className="w-full cursor-pointer accent-indigo-400"
           />
-        </ControlBlock>
+        </Section>
 
-        {activeTool === "text" && (
-          <ControlBlock label={`Font Size ${fontSize}px`}>
+        {/* Font Size */}
+        {showFontSize && (
+          <Section label={`Font Size ${fontSize}px`}>
             <input
               type="range"
               min="12"
@@ -160,50 +202,78 @@ export const Sidebar = ({
               step="2"
               value={fontSize}
               onChange={(e) => setFontSize(Number.parseInt(e.target.value, 10))}
-              className="w-full accent-blue-300"
+              className="w-full cursor-pointer accent-indigo-400"
             />
-          </ControlBlock>
+          </Section>
         )}
       </div>
     </aside>
   )
 }
 
-const ControlBlock = ({ label, children }: { label: string; children: React.ReactNode }) => {
-  return (
-    <section>
-      <p className="mb-2 text-xs uppercase tracking-wide text-white/60">{label}</p>
-      {children}
-    </section>
-  )
-}
+const Section = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <div>
+    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-white/35">{label}</p>
+    {children}
+  </div>
+)
 
-const ColorIndicator = ({
+const ColorSwatch = ({
   color,
-  onClick,
   isActive,
+  onClick,
   ariaLabel,
   transparent,
 }: {
   color: string
-  onClick: () => void
   isActive: boolean
+  onClick: () => void
   ariaLabel: string
   transparent?: boolean
-}) => {
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-label={ariaLabel}
+    className={`h-7 w-full rounded-md border transition-all ${
+      isActive
+        ? "border-indigo-400 shadow-[0_0_0_2px_rgba(99,102,241,0.35)]"
+        : transparent
+          ? "border-white/25 hover:border-white/50"
+          : "border-white/10 hover:border-white/30"
+    } ${transparent ? "relative overflow-hidden" : ""}`}
+    style={{ backgroundColor: color }}
+  >
+    {transparent && (
+      <span
+        className="absolute inset-0"
+        style={{
+          background: "linear-gradient(to bottom right, transparent calc(50% - 0.5px), rgba(239,68,68,0.7) calc(50% - 0.5px), rgba(239,68,68,0.7) calc(50% + 0.5px), transparent calc(50% + 0.5px))",
+        }}
+      />
+    )}
+  </button>
+)
+
+const StrokeStyleIcon = ({ style }: { style: StrokeStyle }) => {
+  if (style === "solid") {
+    return <span className="block h-[2px] w-5 rounded-full bg-current" />
+  }
+  if (style === "dashed") {
+    return (
+      <span className="flex items-center gap-0.5">
+        <span className="block h-[2px] w-1.5 rounded-full bg-current" />
+        <span className="block h-[2px] w-1.5 rounded-full bg-current" />
+        <span className="block h-[2px] w-1.5 rounded-full bg-current" />
+      </span>
+    )
+  }
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={ariaLabel}
-      className={`h-6 w-6 rounded-md border transition-colors ${
-        isActive
-          ? "border-blue-300 shadow-[0_0_0_1px_rgba(147,197,253,0.65)]"
-          : transparent
-            ? "border-white/40"
-            : "border-white/15 hover:border-white/30"
-      }`}
-      style={{ backgroundColor: color }}
-    />
+    <span className="flex items-center gap-1">
+      <span className="block h-[2px] w-[3px] rounded-full bg-current" />
+      <span className="block h-[2px] w-[3px] rounded-full bg-current" />
+      <span className="block h-[2px] w-[3px] rounded-full bg-current" />
+      <span className="block h-[2px] w-[3px] rounded-full bg-current" />
+    </span>
   )
 }
