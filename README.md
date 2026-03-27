@@ -53,12 +53,13 @@ packages/
 
 ## Environment Variables
 ### Root (`.env`)
-- `DATABASE_URL`
+- `DATABASE_URL` (Supabase: use the Postgres URI from **Connect → Postgres**, often the **Session pooler** on Mac, with `?sslmode=require`)
 - `JWT_SECRET`
 - `NODE_ENV`
+- `HTTP_BACKEND_INTERNAL_URL` (where Next proxies `/api/backend/*`; default `http://127.0.0.1:3001`)
 
 ### Frontend (`apps/excelidraw-frontend`)
-- `NEXT_PUBLIC_HTTP_URL`
+- `NEXT_PUBLIC_HTTP_URL` (default `http://127.0.0.1:3000/api/backend` — same origin as Next)
 - `NEXT_PUBLIC_WS_URL`
 - `NEXT_PUBLIC_ENABLE_LIVE_DEMO` (`false` to hide demo CTA)
 
@@ -75,11 +76,12 @@ pnpm install
 ```bash
 docker compose up -d
 ```
+Postgres uses host port **5433** (see `docker-compose.yml`) to avoid clashing with another Postgres on `5432`. Match `DATABASE_URL` in root `.env`.
 
 ### 3. Run migrations
 ```bash
-pnpm --dir packages/db prisma migrate dev
-pnpm --dir packages/db prisma generate
+pnpm --filter @repo/db exec prisma migrate dev
+pnpm --filter @repo/db exec prisma generate
 ```
 
 ### 4. Run all apps
@@ -88,8 +90,8 @@ pnpm dev
 ```
 
 Default local endpoints:
-- Frontend: `http://localhost:3000`
-- HTTP API: `http://localhost:3001`
+- App (Next.js): `http://127.0.0.1:3000` — REST is proxied at `/api/backend/*` to http-backend
+- HTTP API (direct, optional): `http://127.0.0.1:3001` — set `HTTP_BACKEND_INTERNAL_URL` if you change this port
 - WS: `ws://localhost:8080`
 
 ## Scripts

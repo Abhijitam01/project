@@ -23,7 +23,7 @@ touch .env.local
 
 ```env
 NEXT_PUBLIC_WS_URL=ws://localhost:8080
-NEXT_PUBLIC_HTTP_URL=http://localhost:3001
+NEXT_PUBLIC_HTTP_URL=http://127.0.0.1:3000/api/backend
 ```
 
 3. Restart the dev server:
@@ -264,8 +264,7 @@ lsof -i :3000
 # Kill it
 kill -9 <PID>
 
-# Or use a different port
-PORT=3001 pnpm dev
+# Or run Next on another port (see `apps/excelidraw-frontend/package.json` `next dev --port`)
 ```
 
 ---
