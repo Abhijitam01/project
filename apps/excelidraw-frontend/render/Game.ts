@@ -9,6 +9,10 @@ type ResizeHandle = "nw" | "ne" | "sw" | "se";
 type ShapeBounds = { minX: number; minY: number; maxX: number; maxY: number };
 const CANVAS_TEXT_FONT_FAMILY = "\"Caveat\", \"Comic Sans MS\", \"Segoe Print\", cursive"
 const SVG_TEXT_FONT_FAMILY = "'Caveat','Comic Sans MS','Segoe Print',cursive"
+const CURSOR_COLORS = [
+    "#e03e3e", "#d9730d", "#dfab01", "#448361",
+    "#337ea9", "#9065b0", "#c14c8a", "#5e6ad2",
+]
 type MermaidDirection = "TD" | "TB" | "BT" | "LR" | "RL"
 
 type Shape = {
@@ -164,8 +168,9 @@ export class Game {
     private  maxScale: number = 4
     private  lastSnapshotAt: number = 0
     private  snapshotIntervalId: number | null = null
-    private  remoteCursors: Record<string, { x: number; y: number; username: string; updatedAt: number }> = {}
+    private  remoteCursors: Record<string, { targetX: number; targetY: number; renderedX: number; renderedY: number; username: string; updatedAt: number; color: string }> = {}
     private  lastCursorSent: number = 0
+    private  cursorRafId: number | null = null
     private  isPinching: boolean = false
     private  pinchDistance: number = 0
     private  touchPointerId: number | null = null
@@ -273,7 +278,7 @@ export class Game {
             else if(data.type === "cursor"){
                 const payload = JSON.parse(data.data)
                 this.updateRemoteCursor(payload)
-                this.clearCanvas()
+                this.startCursorLoop()
             }
             else if (data.type === "presence" && Array.isArray(data.users)) {
                 this.onPresenceUpdateCallback?.(data.users)
@@ -1250,20 +1255,34 @@ export class Game {
 
     private drawRemoteCursors() {
         this.pruneCursors()
-        this.ctx.save()
-        this.ctx.lineWidth = 1 / this.scale
+        const ctx = this.ctx
+        ctx.save()
         Object.values(this.remoteCursors).forEach((cursor) => {
-            this.ctx.beginPath()
-            this.ctx.fillStyle = "rgba(255,255,255,0.6)"
-            this.ctx.strokeStyle = "rgba(0,0,0,0.6)"
-            this.ctx.arc(cursor.x, cursor.y, 6, 0, Math.PI * 2)
-            this.ctx.fill()
-            this.ctx.stroke()
-            this.ctx.fillStyle = "rgba(255,255,255,0.9)"
-            this.ctx.font = `${12 / this.scale}px Inter, Arial, sans-serif`
-            this.ctx.fillText(cursor.username, cursor.x + 8 / this.scale, cursor.y - 8 / this.scale)
+            ctx.save()
+            ctx.translate(cursor.renderedX, cursor.renderedY)
+            ctx.scale(1 / this.scale, 1 / this.scale)
+
+            const arrow = new Path2D("M 0 0 L 0 16 L 4.5 12 L 8 20 L 10 19 L 6.5 11 L 11 11 Z")
+            ctx.fillStyle = cursor.color
+            ctx.strokeStyle = "rgba(0,0,0,0.75)"
+            ctx.lineWidth = 1.5
+            ctx.fill(arrow)
+            ctx.stroke(arrow)
+
+            const fontSize = 11
+            ctx.font = `600 ${fontSize}px Inter, Arial, sans-serif`
+            const textWidth = ctx.measureText(cursor.username).width
+            const lx = 14, ly = 20, ph = 4, pv = 2
+            ctx.fillStyle = cursor.color
+            ctx.beginPath()
+            ctx.roundRect(lx - ph, ly - fontSize, textWidth + ph * 2, fontSize + pv * 2, 3)
+            ctx.fill()
+            ctx.fillStyle = "white"
+            ctx.fillText(cursor.username, lx, ly)
+
+            ctx.restore()
         })
-        this.ctx.restore()
+        ctx.restore()
     }
 
     private pruneCursors() {
@@ -1275,15 +1294,55 @@ export class Game {
         })
     }
 
+    private getCursorColor(userId: string): string {
+        let hash = 0
+        for (let i = 0; i < userId.length; i++) {
+            hash = (hash * 31 + userId.charCodeAt(i)) & 0xffffffff
+        }
+        return CURSOR_COLORS[Math.abs(hash) % CURSOR_COLORS.length]!
+    }
+
     private updateRemoteCursor(payload: { userId: string; username?: string; x: number; y: number }) {
         if (!payload?.userId) return
         if (!Number.isFinite(payload.x) || !Number.isFinite(payload.y)) return
-        this.remoteCursors[payload.userId] = {
-            x: payload.x,
-            y: payload.y,
-            username: payload.username || "User",
-            updatedAt: Date.now()
+        const existing = this.remoteCursors[payload.userId]
+        if (existing) {
+            existing.targetX = payload.x
+            existing.targetY = payload.y
+            existing.username = payload.username || existing.username
+            existing.updatedAt = Date.now()
+        } else {
+            this.remoteCursors[payload.userId] = {
+                targetX: payload.x,
+                targetY: payload.y,
+                renderedX: payload.x,
+                renderedY: payload.y,
+                username: payload.username || "User",
+                updatedAt: Date.now(),
+                color: this.getCursorColor(payload.userId),
+            }
         }
+    }
+
+    private startCursorLoop() {
+        if (this.cursorRafId !== null) return
+        let lastTime = performance.now()
+        const loop = (now: number) => {
+            const dt = Math.min(now - lastTime, 100)
+            lastTime = now
+            const factor = 1 - Math.pow(0.85, dt / 16.67)
+            Object.values(this.remoteCursors).forEach((cursor) => {
+                cursor.renderedX += (cursor.targetX - cursor.renderedX) * factor
+                cursor.renderedY += (cursor.targetY - cursor.renderedY) * factor
+            })
+            this.clearCanvas()
+            if (Object.keys(this.remoteCursors).length > 0) {
+                this.cursorRafId = requestAnimationFrame(loop)
+            } else {
+                this.cursorRafId = null
+            }
+        }
+        this.cursorRafId = requestAnimationFrame(loop)
     }
 
     private queueCursor(clientX: number, clientY: number) {
@@ -2360,6 +2419,10 @@ export class Game {
         this.canvas.removeEventListener("touchcancel", this.touchCancelHandler)
         if (this.snapshotIntervalId) {
             window.clearInterval(this.snapshotIntervalId)
+        }
+        if (this.cursorRafId !== null) {
+            cancelAnimationFrame(this.cursorRafId)
+            this.cursorRafId = null
         }
     }
 
